@@ -12,7 +12,7 @@ controller作为k8s集群中比较核心的组件，实现了k8s中资源的自�
 
 1、实例化一个sharedInformerFactory，sharedInformerFactory为SharedInformerFactory interface的一种实现。SharedInformerFactory为所有内嵌资源都实现了生成shared infomers的方法
 
-```go
+```golang
 // client-go/informers/factory.go +55
  
 type sharedInformerFactory struct {
