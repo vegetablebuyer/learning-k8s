@@ -4,4 +4,4 @@ controller作为k8s集群中比较核心的组件，实现了k8s中资源的自�
 
 几乎每种资源都有特定的controller去承担该资源的**调谐（reconcile）** 工作，即使是自己定义的资源（CRD）也需要实现相应的controller。而controller-manager则是管理这些controller的控制器，controller-manager不仅管理者所有的controller，也为这些controller提供统一的k8s资源访问的入口，降低controller对apiserver访问的压力。
 
-[![alt text](https://github.com/vegetablebuyer/learning-k8s/blob/main/pictures/controller-manager.png)]
+![alt text](https://github.com/vegetablebuyer/learning-k8s/blob/main/pictures/controller-manager.png)
