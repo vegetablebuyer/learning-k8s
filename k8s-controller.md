@@ -59,3 +59,170 @@ type SharedInformerFactory interface {
    Storage() storage.Interface
 }
 ```
+
+2、通过实例化之后的sharedInformerFactory调用资源informer()的实例化方法，生成相应资源的informer
+```golang
+kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
+deployInformers := kubeInformerFactory.Apps().V1().Deployments().Informers()
+
+// SharedInformerFactory().Apps().V1().Deployments().Informers()最终会调用到下面的代码
+// client-go/informers/apps/v1/deployment.go +84
+func (f *deploymentInformer) Informer() cache.SharedIndexInformer {
+   return f.factory.InformerFor(&appsv1.Deployment{}, f.defaultInformer)
+}
+
+// 反过来会调用sharedInformerFactory的InformerFor()将当前实例化的informer添加到sharedInformerFactory.informers中
+// client-go/informers/factory.go +162
+func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer {
+   f.lock.Lock()
+   defer f.lock.Unlock()
+
+   informerType := reflect.TypeOf(obj)
+   informer, exists := f.informers[informerType]
+   if exists {
+      return informer
+   }
+
+   resyncPeriod, exists := f.customResync[informerType]
+   if !exists {
+      resyncPeriod = f.defaultResync
+   }
+
+   informer = newFunc(f.client, resyncPeriod)
+   f.informers[informerType] = informer
+
+   return informer
+}
+
+```
+3、informer调用AddEventHandler()方法注册资源变化的处理函数
+```golang
+deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+   AddFunc: controller.handleObject,
+   ...
+})
+
+func (c *Controller) handleObject(obj interface{}) {
+      ...
+      c.enqueueFoo(obj)
+      return
+   }
+}
+
+func (c *Controller) enqueueFoo(obj interface{}) {
+   var key string
+   var err error
+   if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+      utilruntime.HandleError(err)
+      return
+   }
+   c.workqueue.Add(key)
+}
+
+// 这里handlerObject方法最关键的是把obj获取到的事件推送到workqueue的队列中，等待process将事件取出处理
+```
+
+4、sharedInformerFactory调用Start()方法将所有实例化的informer启动
+```golang
+kubeInformerFactory.Start(stopCh)
+
+// client-go/informers/factory.go +127
+// Start initializes all requested informers.
+func (f *sharedInformerFactory) Start(stopCh <-chan struct{}) {
+   f.lock.Lock()
+   defer f.lock.Unlock()
+
+   for informerType, informer := range f.informers {
+      if !f.startedInformers[informerType] {
+         go informer.Run(stopCh)
+         f.startedInformers[informerType] = true
+      }
+   }
+}
+
+// infomer的Run()方法
+// client-go/tools/cache/shared_informer.go +368
+func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
+   defer utilruntime.HandleCrash()
+
+   fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
+      KnownObjects:          s.indexer,
+      EmitDeltaTypeReplaced: true,
+   })
+
+   cfg := &Config{
+      ...
+   }
+
+   func() {
+      s.startedLock.Lock()
+      defer s.startedLock.Unlock()
+
+      s.controller = New(cfg)
+      s.controller.(*controller).clock = s.clock
+      s.started = true
+   }()
+
+   ...
+   s.controller.Run(stopCh)
+}
+
+```
+
+5、启动controller，开始消费队列中出现的事件，其中c.syncHandler()便是整个controller核心的逻辑处理
+```golang
+func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
+   defer utilruntime.HandleCrash()
+   defer c.workqueue.ShutDown()
+
+   
+   klog.Info("Starting workers")
+   // Launch two workers to process Foo resources
+   for i := 0; i < threadiness; i++ {
+      go wait.Until(c.runWorker, time.Second, stopCh)
+   }
+
+   klog.Info("Started workers")
+   <-stopCh
+   klog.Info("Shutting down workers")
+
+   return nil
+}
+
+func (c *Controller) runWorker() {
+   for c.processNextWorkItem() {
+   }
+}
+
+// processNextWorkItem will read a single work item off the workqueue and
+// attempt to process it, by calling the syncHandler.
+func (c *Controller) processNextWorkItem() bool {
+   obj, shutdown := c.workqueue.Get()
+
+   if shutdown {
+      return false
+   }
+
+   // We wrap this block in a func so we can defer c.workqueue.Done.
+   err := func(obj interface{}) error {
+     
+      defer c.workqueue.Done(obj)
+      ...
+      if err := c.syncHandler(key); err != nil {
+         // Put the item back on the workqueue to handle any transient errors.
+         c.workqueue.AddRateLimited(key)
+         return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+      }
+      ...
+      return nil
+   }(obj)
+
+   if err != nil {
+      utilruntime.HandleError(err)
+      return true
+   }
+
+   return true
+}
+
+```
