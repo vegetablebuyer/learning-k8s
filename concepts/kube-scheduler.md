@@ -10,7 +10,7 @@ kube-scheduler负责将每一个新建的且没有绑定节点的pod找到最合
 
 ### profiles
 通过```kube-scheduder --config <filename>```来指定profile文件。一个简单的profile文件如下：
-```vim
+```yaml
 apiVersion: kubescheduler.config.k8s.io/v1beta2
 kind: KubeSchedulerConfiguration
 profiles:
