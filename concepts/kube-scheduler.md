@@ -71,3 +71,25 @@ profile配置文件可以控制<u>kube-scheduler</u>调度过程中的每一个�
     实现扩展点: ```bind```
 14. ```DefaultPreemption```: 提供默认的强占机制。\
     实现扩展点: ```postFilter```
+    
+## 多配置文件
+可以配置```kube-scheduler```运行多个配置文件。每个配置文件都有一个关联的调度器名称，并且可以在其扩展点中配置一组不同的插件。\
+使用下面的配置样例，调度器将运行两个配置文件：一个使用默认插件，另一个禁用所有打分插件。
+```yaml
+apiVersion: kubescheduler.config.k8s.io/v1beta2
+kind: KubeSchedulerConfiguration
+profiles:
+  - schedulerName: default-scheduler
+  - schedulerName: no-scoring-scheduler
+    plugins:
+      preScore:
+        disabled:
+        - name: '*'
+      score:
+        disabled:
+        - name: '*'
+```
+对于希望根据特定配置文件来进行调度的pod，可以在```spec.schedulerName```字段指定相应调度器的名称。\
+默认情况下，将创建一个调度器名为```default-scheduler```的配置文件。 这个配置文件包括上面描述的所有默认插件。 声明多个配置文件时，每个配置文件中调度器名称必须唯一。\
+
+如果pod未指定调度器名称，```kube-apiserver```将会把调度器名设置为```default-scheduler```。 因此，应该存在一个调度器名为```default-scheduler```的配置文件来调度这些 Pod。
