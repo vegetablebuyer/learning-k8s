@@ -84,3 +84,63 @@ func getDefaultConfig() *schedulerapi.Plugins {
 	}
 }
 ```
+
+```kube-scheduler```核心调度代码
+```golang
+// pkg/scheduler/core/generic_scheduler.go +128
+
+// Schedule tries to schedule the given pod to one of the nodes in the node list.
+// If it succeeds, it will return the name of the node.
+// If it fails, it will return a FitError error with reasons.
+func (g *genericScheduler) Schedule(ctx context.Context, fwk framework.Framework, state *framework.CycleState, pod *v1.Pod) (result ScheduleResult, err error) {
+	trace := utiltrace.New("Scheduling", utiltrace.Field{Key: "namespace", Value: pod.Namespace}, utiltrace.Field{Key: "name", Value: pod.Name})
+	defer trace.LogIfLong(100 * time.Millisecond)
+
+	if err := g.snapshot(); err != nil {
+		return result, err
+	}
+	trace.Step("Snapshotting scheduler cache and node infos done")
+
+	if g.nodeInfoSnapshot.NumNodes() == 0 {
+		return result, ErrNoNodesAvailable
+	}
+
+	feasibleNodes, filteredNodesStatuses, err := g.findNodesThatFitPod(ctx, fwk, state, pod)
+	if err != nil {
+		return result, err
+	}
+	trace.Step("Computing predicates done")
+
+	if len(feasibleNodes) == 0 {
+		return result, &FitError{
+			Pod:                   pod,
+			NumAllNodes:           g.nodeInfoSnapshot.NumNodes(),
+			FilteredNodesStatuses: filteredNodesStatuses,
+		}
+	}
+
+	// When only one node after predicate, just use it.
+	if len(feasibleNodes) == 1 {
+		return ScheduleResult{
+			SuggestedHost:  feasibleNodes[0].Name,
+			EvaluatedNodes: 1 + len(filteredNodesStatuses),
+			FeasibleNodes:  1,
+		}, nil
+	}
+
+	priorityList, err := g.prioritizeNodes(ctx, fwk, state, pod, feasibleNodes)
+	if err != nil {
+		return result, err
+	}
+
+	host, err := g.selectHost(priorityList)
+	trace.Step("Prioritizing done")
+
+	return ScheduleResult{
+		SuggestedHost:  host,
+		EvaluatedNodes: len(feasibleNodes) + len(filteredNodesStatuses),
+		FeasibleNodes:  len(feasibleNodes),
+	}, err
+}
+
+```
