@@ -99,6 +99,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		return
 	}
 	pod := podInfo.Pod
+	// 根据Pod指定的调度器名字(Pod.Spec.SchedulerName)选择Framework
 	fwk, err := sched.frameworkForPod(pod)
 	if err != nil {
 		// This shouldn't happen, because we only accept for scheduling the pods
@@ -106,6 +107,11 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		klog.Error(err)
 		return
 	}
+	// 判断pod是否需要忽略
+	// 1、已经被删除的pod需要忽略，即pod.DeletionTimestamp != nil
+	// 2、pod已经被先假定已经调度成功了
+	// 3、在调度期间，pod会因为被更新而重新置入调度队列(EventHandlers)，如果是因为绑定过程中更新的信息，则需要忽略
+	//    需要忽略的信息ResourceVersion、Spec.NodeName、Annotations、ManagedFields、Finalizers、Status.Conditions
 	if sched.skipPodSchedule(fwk, pod) {
 		return
 	}
@@ -124,6 +130,9 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		// preempt, with the expectation that the next time the pod is tried for scheduling it
 		// will fit due to the preemption. It is also possible that a different pod will schedule
 		// into the resources that were preempted, but this is harmless.
+		// 调度失败则尝试运行postFilter的插件进行强占调度。
+		// 需要注意的是，即便抢占成功，Pod当前依然是不可调度状态，因为需要等待被强占的Pod退出，所以nominatedNode是否为空就可以判断是否抢占成功了。
+		// 强占的资源也有可能被其他优先级别更高的pod占用，但这是无害的
 		nominatedNode := ""
 		if fitError, ok := err.(*core.FitError); ok {
 			if !fwk.HasPostFilterPlugins() {
@@ -151,6 +160,8 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			klog.ErrorS(err, "Error selecting node for pod", "pod", klog.KObj(pod))
 			metrics.PodScheduleError(fwk.ProfileName(), metrics.SinceInSeconds(start))
 		}
+		// recordSchedulingFailure()用于统一实现调度pod失败的处理。
+		// 包括将调度失败的原因更新到pod的event，将调度失败的pod重新放入调度队列等
 		sched.recordSchedulingFailure(fwk, podInfo, err, v1.PodReasonUnschedulable, nominatedNode)
 		return
 	}
@@ -206,7 +217,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		sched.recordSchedulingFailure(fwk, assumedPodInfo, runPermitStatus.AsError(), reason, "")
 		return
 	}
-
+	// 创建一个异步协程执行绑定操作。异步的原因是因为绑定是一个相对比较耗时的操作，至少包含一次向apiserver写入绑定信息的操作
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
 		bindingCycleCtx, cancel := context.WithCancel(ctx)
@@ -214,6 +225,8 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		metrics.SchedulerGoroutines.WithLabelValues("binding").Inc()
 		defer metrics.SchedulerGoroutines.WithLabelValues("binding").Dec()
 
+		// 等待pod批准通过，如果有permitPlugin返回等待，pod就会被放入waitingPodsMap直到所有的permitPlugin批准通过
+		// k8s在1.20版本及之前都还没实现permitPlugin，不确定在后续的版本会不会实现
 		waitOnPermitStatus := fwk.WaitOnPermit(bindingCycleCtx, assumedPod)
 		if !waitOnPermitStatus.IsSuccess() {
 			var reason string
@@ -233,6 +246,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			return
 		}
 
+		// 执行预绑定的插件
 		// Run "prebind" plugins.
 		preBindStatus := fwk.RunPreBindPlugins(bindingCycleCtx, state, assumedPod, scheduleResult.SuggestedHost)
 		if !preBindStatus.IsSuccess() {
@@ -246,6 +260,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			return
 		}
 
+		// 执行绑定的插件，主要是向apiserver写入pod的资资源bind
 		err := sched.bind(bindingCycleCtx, fwk, assumedPod, scheduleResult.SuggestedHost, state)
 		if err != nil {
 			metrics.PodScheduleError(fwk.ProfileName(), metrics.SinceInSeconds(start))
