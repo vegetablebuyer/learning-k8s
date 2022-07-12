@@ -161,8 +161,8 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	assumedPod := assumedPodInfo.Pod
         // kube-scheduler是通过异步的方式实现Bind，在Bind完成前，调度器还要调度新的Pod，此时就先假定Pod调度完成了。
         // Bind可以简单理解为：需要将Pod的调度结果写入etcd，持久化调度结果，所以也是相对比较耗时的操作。
-        // AssumePod会将Pod的资源需求累加到Node上，这样kube-scheduler在调度其他Pod的时候，就不会占用这部分资源。
-	    // assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
+    // AssumePod会将Pod的资源需求累加到Node上，这样kube-scheduler在调度其他Pod的时候，就不会占用这部分资源。
+	// assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
 	err = sched.assume(assumedPod, scheduleResult.SuggestedHost)
 	if err != nil {
 		metrics.PodScheduleError(fwk.ProfileName(), metrics.SinceInSeconds(start))
