@@ -283,7 +283,7 @@ func (g *genericScheduler) Schedule(ctx context.Context, fwk framework.Framework
 	trace := utiltrace.New("Scheduling", utiltrace.Field{Key: "namespace", Value: pod.Namespace}, utiltrace.Field{Key: "name", Value: pod.Name})
 	defer trace.LogIfLong(100 * time.Millisecond)
 
-    // 从kube-scheduler的缓存中更新一份NodeInfo的快照，在每次调度之前都会更新一次
+	// 从kube-scheduler的缓存中更新一份NodeInfo的快照，在每次调度之前都会更新一次
     // pkg/scheduler/internal/cache/cache.go +203
 	if err := g.snapshot(); err != nil {
 		return result, err
@@ -294,11 +294,11 @@ func (g *genericScheduler) Schedule(ctx context.Context, fwk framework.Framework
 		return result, ErrNoNodesAvailable
 	}
     
-    // 这里会执行preFilter跟filter的插件
-    // preFilter: pkg/scheduler/framework/runtime/framework.go +419
-    //     这里主要是在收集pod的request信息跟cluster节点的资源信息，为下一步的filter做准备
-    //     某些插件的preFilter也可能将pod直接置为不可调度(如interpodaffinity、volumebinding插件)，此时整个调度直接结束
-    // filter: pkg/scheduler/core/generic_scheduler.g +258
+	// 这里会执行preFilter跟filter的插件
+	// preFilter: pkg/scheduler/framework/runtime/framework.go +419
+	//     这里主要是在收集pod的request信息跟cluster节点的资源信息，为下一步的filter做准备
+	//     某些插件的preFilter也可能将pod直接置为不可调度(如interpodaffinity、volumebinding插件)，此时整个调度直接结束
+	// filter: pkg/scheduler/core/generic_scheduler.g +258
 	feasibleNodes, filteredNodesStatuses, err := g.findNodesThatFitPod(ctx, fwk, state, pod)
 	if err != nil {
 		return result, err
@@ -321,18 +321,18 @@ func (g *genericScheduler) Schedule(ctx context.Context, fwk framework.Framework
 			FeasibleNodes:  1,
 		}, nil
 	}
-    // 给筛选之后的node节点打分
-    // 这里会执行preScore跟Score的插件
-    // preScore: pkg/scheduler/framework/runtime/framework.go +621
-    //      这里主要是在收集pod的request信息跟cluster节点的资源信息，为下一步的score做准备
-    //      这里的插件也有可能直接返回错误，让调度提前失败
-    // score: 给筛选之后的node节点打分
+	// 给筛选之后的node节点打分
+	// 这里会执行preScore跟Score的插件
+	// preScore: pkg/scheduler/framework/runtime/framework.go +621
+	//      这里主要是在收集pod的request信息跟cluster节点的资源信息，为下一步的score做准备
+	//      这里的插件也有可能直接返回错误，让调度提前失败
+	// score: 给筛选之后的node节点打分
 	priorityList, err := g.prioritizeNodes(ctx, fwk, state, pod, feasibleNodes)
 	if err != nil {
 		return result, err
 	}
-    // 从打完分的node列表中选出分数最高的node
-    // 如有多个node的分数最高，则从中随机选一个（这里随机选的实现很优雅）
+	// 从打完分的node列表中选出分数最高的node
+	// 如有多个node的分数最高，则从中随机选一个（这里随机选的实现很优雅）
 	host, err := g.selectHost(priorityList)
 	trace.Step("Prioritizing done")
 
