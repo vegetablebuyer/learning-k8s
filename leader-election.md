@@ -6,6 +6,34 @@ k8s的控制面组件中，除了```kube-apiserver```是多个副本一起工作
 
 在k8s早期的版本中，**锁**是```endpoint```资源，而在后期较新的版本中**锁**资源换成了```lease```资源
 
+### leader-election配置
+
+```golang
+// vendor/k8s.io/component-base/config/types.go +41
+type LeaderElectionConfiguration struct {
+	// 是否开启leader选举
+	LeaderElect bool
+	
+	// candidate节点对leader进行探活的间隔时间
+	LeaseDuration metav1.Duration
+
+	// leader节点续约的间隔时间，必须小于LeaseDuration
+	RenewDeadline metav1.Duration
+
+	// candidate节点尝试获取锁的间隔时间
+	RetryPeriod metav1.Duration
+	
+	// 锁资源的类型
+	ResourceLock string
+
+	// 锁资源的名字
+	ResourceName string
+
+	// 锁资源所在的命名空间
+	ResourceNamespace string
+}
+```
+
 ### 锁
 
 ```bash
@@ -35,3 +63,4 @@ spec:
   leaseTransitions: 26
   renewTime: "2022-07-13T12:44:20.919959Z"
 ```
+
