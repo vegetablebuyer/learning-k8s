@@ -1,2 +1,3 @@
 k8s的控制面组件中，除了```kube-apiserver```是多个副本一起工作之外，另外两个组件```kube-controller-manager```跟```kube-scheduler```都是只有一个```leader```在工作，其他节点都是```candidate```，等待着```leader```故障之后接替。
-如何在多个副本中选举```leader```，在k8s中是基于```leader election```来实现的。简单点说多个副本都去竞争k8s中的同一个资源作为**锁**，先获取到**锁**的就成为```leader```，其他节点自动成为```candidate```。```leader```节点需要不断地renew
+如何在多个副本中选举```leader```，在k8s中是基于```leader election```来实现的。简单点说多个副本都去竞争k8s中的同一个资源作为**锁**，先获取到**锁**的就成为```leader```，其他节点自动成为```candidate```。
+```leader```节点需要不断地```renew```**锁**以维持自己```leader```的身份。其他```candidate```也会不断地去获取这个**锁**的信息，检查**锁**是否过期。如果**锁**过期，就认为```leader```已经故障，并尝试成为**锁**的```holder```从未成为```leader```
