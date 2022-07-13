@@ -6,6 +6,8 @@ k8s的控制面组件中，除了```kube-apiserver```是多个副本一起工作
 
 在k8s早期的版本中，**锁**是```endpoint```资源，而在后期较新的版本中**锁**资源换成了```lease```资源
 
+### 锁
+
 ```bash
 kubectl get ep -n kube-system kube-scheduler -o yaml
 apiVersion: v1
