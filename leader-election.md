@@ -4,7 +4,7 @@ k8s的控制面组件中，除了```kube-apiserver```是多个副本一起工作
 
 上面的这些逻辑的实现都是基于```client-go```中的```tools/leaderelection```来实现的
 
-在k8s早期的版本中，**锁**是```endpoint```资源，而在后期较新的版本中**锁**资源换成了```lease```资源
+在k8s早期的版本中，```kube-scheduler```跟```kube-controller-manager```默认使用的**锁**是```endpoint```资源，而在后期较新的版本中**锁**资源换成了```lease```资源
 
 ### leader-election配置
 
