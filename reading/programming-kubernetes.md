@@ -51,3 +51,37 @@ var err error
 需要意识到的是，冲突在controller中是非常常见的，controller的逻辑要需要优雅地处理这些冲突。\
 并发控制完美地适配水平触发的轮询机制，因为即使当前的这一次修改只修改了资源，但是没有将资源的状态更新到etcd中，下一次循环会抹除上一次的修改，并将修改的内容尝试更新到etcd。\
 
+## K8S API 专有名词
+
+- kind：一个资源对象的类型，每个资源对象都有一个字段```kind```来标识自己的资源类型。有三种不同类型的```kind```
+    - pod或者node这种代表单个对象的
+    - podlist或者nodelist这种代表一个或者多个对象的集合
+    - 特殊用途的```kind```，用于表示对资源对象的操作的，比如```scale```、```binding```等；用于服务发现的```APIGroup```和```APIResource```；```status```表示状态。
+- API Group：一些逻辑上相关联的```kind```的集合。如```Job```和```ScheduledJob```属于```batch```的```APIGroup```
+- Version：每个```APIGroup```都可以同时存在多个版本```version```。一个资源对象用某个```version```创建之后也可以用另外任何一个```version```检索出来。```apiserver```需要在不同的版本之间做无损的转换。
+> 严格来说，"资源A在系统中属于版本v1，资源B在系统中属于版本v1beta1"这种说法是不对的，每个资源对象在系统中既能够以v1的版本展示出来，也能够以v1beta1的版本展示出来。
+
+- Resource：一般是小写、复数的，例如pods。用于标识一个HTTP请求的路径，通常的路径是
+    - .../pods，会返回当前集合的所有资源对象
+    - .../pods/nginx，只会返回当前集合中以nginx命名的pod
+> Resources跟kinds两个经常容易搞混
+> - Resources相当于HTTP请求路径
+> - Kinds是HTTP请求路径返回的资源对象，也是etcd中持久化的对象
+
+每一个```GroupVerisonResource(GVR)```都定义了一个HTTP路径。下图展示了一个具有namespace属性的资源，如```Job```，他的```GVR```是如何关联HTTP路径的：
+![alt text](../pictures/GVR.png)
+与```GVR```类似，每一个```kind```也都单独可以用```GroupVersionKind(GVK)```来定义。\
+```GVRs```跟```GVKs```直接是有联系的。由```GVRs```定义的HTTP请求路径服务于```GVKs```定义的资源。```GVK```到```GVR```直接的映射称为```REST mapping```。
+
+## Go语言中的k8s对象
+k8s资源对象，即```kind```的实例，在APIServer中是以结构体的形式存在。根据```kind```的不同，结构体的字段不同，但是整体的架构是一致的。
+```golang
+type Object interface {
+    GetObjectKind() schema.ObjectKind
+    DeepCopyObject() Object
+}
+```
+## API Machinery
+```API Machinery```库构造了k8s中```type system```的基础。这里所说的```type```指的就是上文提到的```kind```。\
+
+
