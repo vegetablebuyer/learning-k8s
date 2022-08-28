@@ -93,9 +93,85 @@ type ObjectKind interface {
 换句话说，k8s的对象在Go语言中只是一个数据结构，并且具有下面的功能：
 - 可以返回并且设置```GroupVersionKind```
 - 可以被深度拷贝
+### TypeMeta
+k8s的对象通过嵌入```metav1.TypeMeta```来实现```schema.ObjectKind```要求的```setter```跟```getter```方法。
+```golang
+// package k8s.io/apimachinery/meta/v1
+type TypeMeta struct {
+    Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+    APIVersion string `json:"apiVersion,omitempty"`
+}
+```
+### ObjectMeta
+除了```TypeMeta```之外，大多数顶层的k8s对象也都嵌入了```metav1.ObjectMeta```
+```golang
+//  k8s.io/apimachinery/pkg/meta/v1
+type ObjectMeta struct {
+    Name string `json:"name,omitempty"`
+    Namespace string `json:"namespace,omitempty"`
+    UID types.UID `json:"uid,omitempty"`
+    ResourceVersion string `json:"resourceVersion,omitempty"`
+    CreationTimestamp Time `json:"creationTimestamp,omitempty"`
+    DeletionTimestamp *Time `json:"deletionTimestamp,omitempty"`
+    Labels map[string]string `json:"labels,omitempty"`
+    Annotations map[string]string `json:"annotations,omitempty"`
+       ...
+}
 
+```
+### spec and status
+几乎所有顶层的k8s对象都有```spec```跟```status```的字段。这是由于k8s本身声明性的特点决定的：```spec```字段描述了用户期待的状态，而```status```字段记录了这个对象真实的状态。通常```status```字段由集群中的```controller```来补充。\
+k8s也存在小部分没有```spec```或者```status```字段的对象。例如，```endpoints```跟```ClusterRole```中的```RABC```。
 ## API Machinery
 ```API Machinery```库构造了k8s中```type system```的基础。这里所说的```type```指的就是上文提到的```kind```。\
+```GVK```到```GVR```之间的映射是由```REST mapping```来完成的，可以让我们通过```GVR```来请求```GVK```。
+```golang
+// RESTMappings returns all resource mappings for the provided group kind
+// if no version search is provided. Otherwise identifies a preferred resource
+// mapping for the provided version(s).
+RESTMapping(gk schema.GroupKind, versions ...string) (*RESTMapping, error)
+```
+```RESTMapping```是一个结构体，如下：
+```golang
+// RESTMapping contains the information needed to deal with objects of a specific
+// resource and kind in a RESTful manner.
+type RESTMapping struct {
+	// Resource is the GroupVersionResource (location) for this endpoint
+	Resource schema.GroupVersionResource
 
+	// GroupVersionKind is the GroupVersionKind (data format) to submit to this endpoint
+	GroupVersionKind schema.GroupVersionKind
+
+	// Scope contains the information needed to deal with REST Resources that are in a resource hierarchy
+	Scope RESTScope
+}
+
+```
+```RESTMapper```是一个```interface```，提供了很多方法
+```golang
+type RESTMapper interface {
+	// KindFor takes a partial resource and returns the single match.  Returns an error if there are multiple matches
+	KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error)
+
+	// KindsFor takes a partial resource and returns the list of potential kinds in priority order
+	KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error)
+
+	// ResourceFor takes a partial resource and returns the single match.  Returns an error if there are multiple matches
+	ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error)
+
+	// ResourcesFor takes a partial resource and returns the list of potential resource in priority order
+	ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error)
+
+	// RESTMapping identifies a preferred resource mapping for the provided group kind.
+	RESTMapping(gk schema.GroupKind, versions ...string) (*RESTMapping, error)
+	// RESTMappings returns all resource mappings for the provided group kind if no
+	// version search is provided. Otherwise identifies a preferred resource mapping for
+	// the provided version(s).
+	RESTMappings(gk schema.GroupKind, versions ...string) ([]*RESTMapping, error)
+
+	ResourceSingularizer(resource string) (singular string, err error)
+}
+
+```
 
 
