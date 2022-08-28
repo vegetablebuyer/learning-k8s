@@ -76,12 +76,26 @@ var err error
 ## Go语言中的k8s对象
 k8s资源对象，即```kind```的实例，在APIServer中是以结构体的形式存在。根据```kind```的不同，结构体的字段不同，但是整体的架构是一致的。
 ```golang
+// k8s.io/apimachinery/pkg/runtime
 type Object interface {
     GetObjectKind() schema.ObjectKind
     DeepCopyObject() Object
 }
 ```
+而```schema.ObjectKind```也是另外一个简单的```interface```
+```golang
+// k8s.io/apimachinery/pkg/runtime/schema
+type ObjectKind interface {
+    SetGroupVersionKind(kind GroupVersionKind)
+    GroupVersionKind() GroupVersionKind
+}
+```
+换句话说，k8s的对象在Go语言中只是一个数据结构，并且具有下面的功能：
+- 可以返回并且设置```GroupVersionKind```
+- 可以被深度拷贝
+
 ## API Machinery
 ```API Machinery```库构造了k8s中```type system```的基础。这里所说的```type```指的就是上文提到的```kind```。\
+
 
 
