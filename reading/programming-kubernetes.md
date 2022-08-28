@@ -93,7 +93,7 @@ type ObjectKind interface {
 换句话说，k8s的对象在Go语言中只是一个数据结构，并且具有下面的功能：
 - 可以返回并且设置```GroupVersionKind```
 - 可以被深度拷贝
-### TypeMeta
+#### TypeMeta
 k8s的对象通过嵌入```metav1.TypeMeta```来实现```schema.ObjectKind```要求的```setter```跟```getter```方法。
 ```golang
 // package k8s.io/apimachinery/meta/v1
@@ -102,7 +102,7 @@ type TypeMeta struct {
     APIVersion string `json:"apiVersion,omitempty"`
 }
 ```
-### ObjectMeta
+#### ObjectMeta
 除了```TypeMeta```之外，大多数顶层的k8s对象也都嵌入了```metav1.ObjectMeta```
 ```golang
 //  k8s.io/apimachinery/pkg/meta/v1
@@ -119,7 +119,7 @@ type ObjectMeta struct {
 }
 
 ```
-### spec and status
+#### spec and status
 几乎所有顶层的k8s对象都有```spec```跟```status```的字段。这是由于k8s本身声明性的特点决定的：```spec```字段描述了用户期待的状态，而```status```字段记录了这个对象真实的状态。通常```status```字段由集群中的```controller```来补充。\
 k8s也存在小部分没有```spec```或者```status```字段的对象。例如，```endpoints```跟```ClusterRole```中的```RABC```。
 ## API Machinery
@@ -173,5 +173,18 @@ type RESTMapper interface {
 }
 
 ```
+#### Scheme
+```scheme```最主要的功能就是将Golang代码的对象映射到所有可能的```GVKs```。
+```golang
+// k8s.io/apimachinery/pkg/runtime
+func (s *Scheme) ObjectKinds(obj Object) ([]schema.GroupVersionKind, bool, error)
+```
+上面提到，k8s对象可以通过```GetObjectKind() schema.ObjectKind```方法来获取自己所属的group跟kind。但是这些值在大多数情况下是空的，所以几乎没什么用。\
+取而代之的是，scheme通过映射（reflection）拿到k8s对象的Golang types，然后再注册好的```GVKs```中查找该Golang types的映射。当然，这种方法要生效的话，需要提前将Golang types注册到scheme中来：
+```golang
+scheme.AddKnownTypes(schema.GroupVersionKind{"", "v1", "Pod"}, &Pod{})
+```
+如果关于scheme的概念中你只能记住一件事情的话，那么请记住下面的图片：
+![alt text](../pictures/scheme.png)
 
 
