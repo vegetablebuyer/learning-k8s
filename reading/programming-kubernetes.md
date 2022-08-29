@@ -180,7 +180,7 @@ type RESTMapper interface {
 func (s *Scheme) ObjectKinds(obj Object) ([]schema.GroupVersionKind, bool, error)
 ```
 上面提到，k8s对象可以通过```GetObjectKind() schema.ObjectKind```方法来获取自己所属的group跟kind。但是这些值在大多数情况下是空的，所以几乎没什么用。\
-取而代之的是，scheme通过映射（reflection）拿到k8s对象的Golang types，然后再注册好的```GVKs```中查找该Golang types的映射。当然，这种方法要生效的话，需要提前将Golang types注册到scheme中来：
+取而代之的是，scheme通过映射（reflection）拿到k8s对象的Golang types，然后在注册好的```GVKs```中查找该Golang types的映射。当然，这种方法要生效的话，需要提前将Golang types注册到scheme中来：
 ```golang
 scheme.AddKnownTypes(schema.GroupVersionKind{"", "v1", "Pod"}, &Pod{})
 ```
