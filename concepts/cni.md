@@ -47,7 +47,7 @@ CNI为网络管理员定义了网络配置的格式，其中包含了提供给**
 > iptables-t nat -A POSTROUTING -s 10.8.0.0/255.255.255.0 -o eth0 -j SNAT --to-source 192.168.5.3
 
 一个配置文件的例子
-```json
+```json5
 {
   "cniVersion": "1.0.0",
   "name": "dbnet",
