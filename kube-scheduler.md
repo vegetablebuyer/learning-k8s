@@ -1,4 +1,134 @@
-### kube-scheduler
+## kube-scheduler
+### kube-scheduler配置文件
+```golang
+// pkg/scheduler/apis/config/types.go +54
+// KubeSchedulerConfiguration configures a scheduler
+type KubeSchedulerConfiguration struct {
+	metav1.TypeMeta
+
+	// Parallelism defines the amount of parallelism in algorithms for scheduling a Pods. Must be greater than 0. Defaults to 16
+	Parallelism int32
+
+	AlgorithmSource SchedulerAlgorithmSource
+
+	LeaderElection componentbaseconfig.LeaderElectionConfiguration
+
+	ClientConnection componentbaseconfig.ClientConnectionConfiguration
+
+	HealthzBindAddress string
+
+	MetricsBindAddress string
+
+	componentbaseconfig.DebuggingConfiguration
+
+	PercentageOfNodesToScore int32
+
+	PodInitialBackoffSeconds int64
+
+	PodMaxBackoffSeconds int64
+
+	Profiles []KubeSchedulerProfile
+
+	Extenders []Extender
+}
+
+// KubeSchedulerProfile is a scheduling profile.
+type KubeSchedulerProfile struct {
+	// SchedulerName is the name of the scheduler associated to this profile.
+	// If SchedulerName matches with the pod's "spec.schedulerName", then the pod
+	// is scheduled with this profile.
+	SchedulerName string
+
+	// Plugins specify the set of plugins that should be enabled or disabled.
+	// Enabled plugins are the ones that should be enabled in addition to the
+	// default plugins. Disabled plugins are any of the default plugins that
+	// should be disabled.
+	// When no enabled or disabled plugin is specified for an extension point,
+	// default plugins for that extension point will be used if there is any.
+	// If a QueueSort plugin is specified, the same QueueSort Plugin and
+	// PluginConfig must be specified for all profiles.
+	Plugins *Plugins
+
+	// PluginConfig is an optional set of custom plugin arguments for each plugin.
+	// Omitting config args for a plugin is equivalent to using the default config
+	// for that plugin.
+	PluginConfig []PluginConfig
+}
+```
+
+scheduler配置文件的默认配置
+
+```golang
+// cmd/kub-scheduler/app/options/options.go +138
+func newDefaultComponentConfig() (*kubeschedulerconfig.KubeSchedulerConfiguration, error) {
+	versionedCfg := kubeschedulerconfigv1beta1.KubeSchedulerConfiguration{}
+	versionedCfg.DebuggingConfiguration = *configv1alpha1.NewRecommendedDebuggingConfiguration()
+
+	kubeschedulerscheme.Scheme.Default(&versionedCfg)
+	cfg := kubeschedulerconfig.KubeSchedulerConfiguration{}
+	if err := kubeschedulerscheme.Scheme.Convert(&versionedCfg, &cfg, nil); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+// kube-scheduler的配置文件由v1beta1版本转换为v1版本，而其中v1beta1版本的默认配置见下面函数
+// pkg/scheduler/apis/config/v1beta1/defaults.go +46
+func SetDefaults_KubeSchedulerConfiguration(obj *v1beta1.KubeSchedulerConfiguration) {
+    ...
+}
+
+```
+```golang
+// v1beta1版本相比于v1版本少了AlgorithmSource的字段，改字段的转换需要手动转换
+// pkg/scheduler/apis/config/v1beta1/conversion.go +49
+func Convert_v1beta1_KubeSchedulerConfiguration_To_config_KubeSchedulerConfiguration(in *v1beta1.KubeSchedulerConfiguration, out *config.KubeSchedulerConfiguration, s conversion.Scope) error {
+	if err := autoConvert_v1beta1_KubeSchedulerConfiguration_To_config_KubeSchedulerConfiguration(in, out, s); err != nil {
+		return err
+	}
+    // v1beta1.SchedulerDefaultProviderName = "DefaultProvider"
+	out.AlgorithmSource.Provider = pointer.StringPtr(v1beta1.SchedulerDefaultProviderName)
+	return convertToInternalPluginConfigArgs(out)
+}
+
+```
+
+如果kube-scheduler的下面三个参数配置了其中一个，那么AlgorithmSource将会被重新赋值
+```golang
+// ApplyAlgorithmSourceTo sets cfg.AlgorithmSource from flags passed on the command line in the following precedence order:
+//
+// 1. --use-legacy-policy-config to use a policy file.
+// 2. --policy-configmap to use a policy config map value.
+// 3. --algorithm-provider to use a named algorithm provider.
+func (o *DeprecatedOptions) ApplyAlgorithmSourceTo(cfg *kubeschedulerconfig.KubeSchedulerConfiguration) {
+	if o == nil {
+		return
+	}
+
+	switch {
+	case o.UseLegacyPolicyConfig || (len(o.PolicyConfigFile) > 0 && o.PolicyConfigMapName == ""):
+		cfg.AlgorithmSource = kubeschedulerconfig.SchedulerAlgorithmSource{
+			Policy: &kubeschedulerconfig.SchedulerPolicySource{
+				File: &kubeschedulerconfig.SchedulerPolicyFileSource{
+					Path: o.PolicyConfigFile,
+				},
+			},
+		}
+	case len(o.PolicyConfigMapName) > 0:
+		cfg.AlgorithmSource = kubeschedulerconfig.SchedulerAlgorithmSource{
+			Policy: &kubeschedulerconfig.SchedulerPolicySource{
+				ConfigMap: &kubeschedulerconfig.SchedulerPolicyConfigMapSource{
+					Name:      o.PolicyConfigMapName,
+					Namespace: o.PolicyConfigMapNamespace,
+				},
+			},
+		}
+	case len(o.AlgorithmProvider) > 0:
+		cfg.AlgorithmSource = kubeschedulerconfig.SchedulerAlgorithmSource{
+			Provider: &o.AlgorithmProvider,
+		}
+	}
+}
+```
 
 scheduler默认的plugins插件配置
 
