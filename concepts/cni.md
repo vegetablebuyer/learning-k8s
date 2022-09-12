@@ -33,7 +33,60 @@ CNI为网络管理员定义了网络配置的格式，其中包含了提供给**
     - 其它任何以```cni.dev/```开头的键
 - 可选的键值对，比较知名常用的：
     - ```ipMasq```：布尔值，如果插件支持，这个插件决定了要不要设置ip masquerade
+    - ```ipam```：字典，
+        - ```type```：IPAM插件的可执行文件的名字
+    - ```dns```：字典，DNS相关的具体配置
+        - ```nameservers```：列表，nameserver服务器的地址
+        - ```domain```：字符串
+        - ```search```：列表
+        - ```options```：列表
+- 其他键值对：插件可能定义了其他的键值对，***runtime***需要确保这些键值对在转换的时候被保留下来
 > ip masquerade是一种Linux的网络急速，可以看成一种SNAT的特例。只要设置了masquerade，不管网口设置了什么ip，masquerade都会自动读取并SNAT \
 > iptables-t nat -A POSTROUTING -s 10.8.0.0/255.255.255.0 -o eth0 -j MASQUERADE
 > 如果要用iptables的SNAT，那么网口的ip地址每变化一次都需要重新修改一次
 > iptables-t nat -A POSTROUTING -s 10.8.0.0/255.255.255.0 -o eth0 -j SNAT --to-source 192.168.5.3
+
+一个配置文件的例子
+```json
+{
+  "cniVersion": "1.0.0",
+  "name": "dbnet",
+  "plugins": [
+    {
+      "type": "bridge",
+      // plugin specific parameters
+      "bridge": "cni0",
+      "keyA": ["some more", "plugin specific", "configuration"],
+      
+      "ipam": {
+        "type": "host-local",
+        // ipam specific
+        "subnet": "10.1.0.0/16",
+        "gateway": "10.1.0.1",
+        "routes": [
+            {"dst": "0.0.0.0/0"}
+        ]
+      },
+      "dns": {
+        "nameservers": [ "10.1.0.1" ]
+      }
+    },
+    {
+      "type": "tuning",
+      "capabilities": {
+        "mac": true
+      },
+      "sysctl": {
+        "net.core.somaxconn": "500"
+      }
+    },
+    {
+        "type": "portmap",
+        "capabilities": {"portMappings": true}
+    }
+  ]
+}
+```
+
+
+
