@@ -103,8 +103,37 @@ CNI插件负责给容器配置网络接口，插件可分为下面两大类：
 - ```CNI_ARGS```：一些额外的参数
 - ```CNI_PATH```：CNI可执行二进制文件的路径
 #### CNI操作类型
-##### ```ADD```
+##### 1. ```ADD```
 CNI插件在收到```ADD```操作指令的时候，需要做下面两件事情中其中意见：
 - 在容器的```CNI_NETNS```网络命令空间中创建```CNI_IFNAME```为名字的网络接口
 - 修改```CNI_NETNS```网络命令空间中```CNI_IFNAME```网络接口的配置
 ***runtime***不应该在没有```DEL```操作的前提下为同一个```CNI_CONTAINERID```，```CNI_IFNAME```组合调用两次```ADD```
+
+###### Input参数：
+***runtime***会通过标准输入提供一个json序列化之后的配置对象
+必需的参数：
+- ```CNI_COMMAND```
+- ```CNI_CONTAINERID```
+- ```CNI_NETNS```
+- ```CNI_IFNAME```
+可选参数：
+- ```CNI_ARGS```
+- ```CNI_PATH```
+##### 2. ```DEL```
+CNI插件在收到```DEL```操作指令的时候，需要做下面两件事情中其中意见：
+- 在容器的```CNI_NETNS```网络命令空间中删除```CNI_IFNAME```为名字的网络接口
+- 撤销插件```ADD```功能所做的修改
+***runtime***应该接受为同一个```CNI_CONTAINERID```，```CNI_IFNAME```组合调用多次```DEL```，并在网络接口不存在的时候也返回成功
+
+###### Input参数：
+***runtime***会通过标准输入提供一个json序列化之后的配置对象
+必需的参数：
+- ```CNI_COMMAND```
+- ```CNI_CONTAINERID```
+- ```CNI_IFNAME```
+可选参数：
+- ```CNI_NETNS```
+- ```CNI_ARGS```
+- ```CNI_PATH```
+
+##### 3. ```CHECK```
