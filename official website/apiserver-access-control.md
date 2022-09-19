@@ -85,6 +85,16 @@ kube-apiserver --disable-admission-plugins=PodNodeSelector,AlwaysDeny ...
 ```shell script
 kube-apiserver -h | grep enable-admission-plugins
 ```
+#### 每个准入控制器的作用
+##### AlwaysAdmit
+该准入控制器允许所有的 Pod 进入集群。此插件已被弃用，因其行为与没有准入控制器一样
+##### AlwaysDeny
+拒绝所有的请求。由于它没有实际意义，已被弃用。
+##### AlwaysPullImages
+该准入控制器会修改每个新创建的Pod，将其镜像拉取策略设置为Always。这在多租户集群中是有用的，这样用户就可以放心，他们的私有镜像只能被那些有凭证的人使用。
+如果没有这个控制器，一旦镜像被拉取到节点上，任何pod在已知镜像名称的情况下就可以使用该镜像。启用这个准入控制器之后，启动容器之前必须拉取镜像，这意味着需要有效的凭证。
+##### 
+                                               
 
 
 
