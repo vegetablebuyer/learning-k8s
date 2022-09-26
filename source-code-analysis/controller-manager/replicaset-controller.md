@@ -44,9 +44,9 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 ### pod的修改
 ```golang
 // kubernetes/pkg/controller/replicaset/replica_set.go +396
-func (rsc *ReplicaSetController) updatePod(old, cur interface{}) {
-	curPod := cur.(*v1.Pod)
-	oldPod := old.(*v1.Pod)
+func (rsc *ReplicaSetController) updatePod(old, cur interface{})
+    curPod := cur.(*v1.Pod)
+    oldPod := old.(*v1.Pod)
 	if curPod.ResourceVersion == oldPod.ResourceVersion {
         // 新旧pod的ResourceVersion一致，代表无变化，直接返回
 		// Periodic resync will send update events for all known pods.
