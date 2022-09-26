@@ -3,42 +3,42 @@
 ```golang
 // kubernetes/pkg/controller/replicaset/replica_set.go +127
 func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer coreinformers.PodInformer, kubeClient clientset.Interface, burstReplicas int,
-	gvk schema.GroupVersionKind, metricOwnerName, queueName string, podControl controller.PodControlInterface) *ReplicaSetController {
-	if kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {
-		ratelimiter.RegisterMetricAndTrackRateLimiterUsage(metricOwnerName, kubeClient.CoreV1().RESTClient().GetRateLimiter())
-	}
+    gvk schema.GroupVersionKind, metricOwnerName, queueName string, podControl controller.PodControlInterface) *ReplicaSetController {
+    if kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {
+        ratelimiter.RegisterMetricAndTrackRateLimiterUsage(metricOwnerName, kubeClient.CoreV1().RESTClient().GetRateLimiter())
+    }
 
-	rsc := &ReplicaSetController{
-		GroupVersionKind: gvk,
-		kubeClient:       kubeClient,
-		podControl:       podControl,
-		burstReplicas:    burstReplicas,
-		expectations:     controller.NewUIDTrackingControllerExpectations(controller.NewControllerExpectations()),
-		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), queueName),
-	}
+    rsc := &ReplicaSetController{
+        GroupVersionKind: gvk,
+        kubeClient:       kubeClient,
+        podControl:       podControl,
+        burstReplicas:    burstReplicas,
+        expectations:     controller.NewUIDTrackingControllerExpectations(controller.NewControllerExpectations()),
+        queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), queueName),
+    }
 
-	rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    rsc.addRS,
-		UpdateFunc: rsc.updateRS,
-		DeleteFunc: rsc.deleteRS,
-	})
-	rsc.rsLister = rsInformer.Lister()
-	rsc.rsListerSynced = rsInformer.Informer().HasSynced
+    rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+        AddFunc:    rsc.addRS,
+        UpdateFunc: rsc.updateRS,
+        DeleteFunc: rsc.deleteRS,
+    })
+    rsc.rsLister = rsInformer.Lister()
+    rsc.rsListerSynced = rsInformer.Informer().HasSynced
 
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: rsc.addPod,
-		// This invokes the ReplicaSet for every pod change, eg: host assignment. Though this might seem like
-		// overkill the most frequent pod update is status, and the associated ReplicaSet will only list from
-		// local storage, so it should be ok.
-		UpdateFunc: rsc.updatePod,
-		DeleteFunc: rsc.deletePod,
-	})
-	rsc.podLister = podInformer.Lister()
-	rsc.podListerSynced = podInformer.Informer().HasSynced
+    podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+        AddFunc: rsc.addPod,
+        // This invokes the ReplicaSet for every pod change, eg: host assignment. Though this might seem like
+        // overkill the most frequent pod update is status, and the associated ReplicaSet will only list from
+        // local storage, so it should be ok.
+        UpdateFunc: rsc.updatePod,
+        DeleteFunc: rsc.deletePod,
+    })
+    rsc.podLister = podInformer.Lister()
+    rsc.podListerSynced = podInformer.Informer().HasSynced
 
-	rsc.syncHandler = rsc.syncReplicaSet
+    rsc.syncHandler = rsc.syncReplicaSet
 
-	return rsc
+    return rsc
 }
 ```
 ### pod的修改
