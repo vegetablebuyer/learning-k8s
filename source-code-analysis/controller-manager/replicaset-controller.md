@@ -47,79 +47,79 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 func (rsc *ReplicaSetController) updatePod(old, cur interface{})
     curPod := cur.(*v1.Pod)
     oldPod := old.(*v1.Pod)
-	if curPod.ResourceVersion == oldPod.ResourceVersion {
-        // 新旧pod的ResourceVersion一致，代表无变化，直接返回
-		// Periodic resync will send update events for all known pods.
-		// Two different versions of the same pod will always have different RVs.
-		return
-	}
+    if curPod.ResourceVersion == oldPod.ResourceVersion {
+    // 新旧pod的ResourceVersion一致，代表无变化，直接返回
+    // Periodic resync will send update events for all known pods.
+    // Two different versions of the same pod will always have different RVs.
+        return
+    }
+    
+    labelChanged := !reflect.DeepEqual(curPod.Labels, oldPod.Labels)
+    if curPod.DeletionTimestamp != nil {
+    // pod的DeletionTimestamp不为空，表示pod处于删除状态，直接调用rsc.deletePod()处理
+    // when a pod is deleted gracefully it's deletion timestamp is first modified to reflect a grace period, 
+    // and after such time has passed, the kubelet actually deletes it from the store. We receive an update 
+    // for modification of the deletion timestamp and expect an rs to create more replicas asap, not wait 
+    // until the kubelet actually deletes the pod. This is different from the Phase of a pod changing, because 
+    // an rs never initiates a phase change, and so is never asleep waiting for the same. 
+        rsc.deletePod(curPod)
+        if labelChanged {
+            // we don't need to check the oldPod.DeletionTimestamp because DeletionTimestamp cannot be unset. 
+            rsc.deletePod(oldPod)
+        }
+        return
+    }
+    
+    curControllerRef := metav1.GetControllerOf(curPod)
+    oldControllerRef := metav1.GetControllerOf(oldPod)
+    controllerRefChanged := !reflect.DeepEqual(curControllerRef, oldControllerRef)
+    if controllerRefChanged && oldControllerRef != nil {
+        // The ControllerRef was changed. Sync the old controller, if any. 
+        if rs := rsc.resolveControllerRef(oldPod.Namespace, oldControllerRef); rs != nil {
+            rsc.enqueueRS(rs)
+        }
+    }
 
-	labelChanged := !reflect.DeepEqual(curPod.Labels, oldPod.Labels)
-	if curPod.DeletionTimestamp != nil {
-        // pod的DeletionTimestamp不为空，表示pod处于删除状态，直接调用rsc.deletePod()处理
-		// when a pod is deleted gracefully it's deletion timestamp is first modified to reflect a grace period,
-		// and after such time has passed, the kubelet actually deletes it from the store. We receive an update
-		// for modification of the deletion timestamp and expect an rs to create more replicas asap, not wait
-		// until the kubelet actually deletes the pod. This is different from the Phase of a pod changing, because
-		// an rs never initiates a phase change, and so is never asleep waiting for the same.
-		rsc.deletePod(curPod)
-		if labelChanged {
-			// we don't need to check the oldPod.DeletionTimestamp because DeletionTimestamp cannot be unset.
-			rsc.deletePod(oldPod)
-		}
-		return
-	}
-
-	curControllerRef := metav1.GetControllerOf(curPod)
-	oldControllerRef := metav1.GetControllerOf(oldPod)
-	controllerRefChanged := !reflect.DeepEqual(curControllerRef, oldControllerRef)
-	if controllerRefChanged && oldControllerRef != nil {
-		// The ControllerRef was changed. Sync the old controller, if any.
-		if rs := rsc.resolveControllerRef(oldPod.Namespace, oldControllerRef); rs != nil {
-			rsc.enqueueRS(rs)
-		}
-	}
-
-	// If it has a ControllerRef, that's all that matters.
-	if curControllerRef != nil {
-		rs := rsc.resolveControllerRef(curPod.Namespace, curControllerRef)
-		if rs == nil {
-			return
-		}
-		klog.V(4).Infof("Pod %s updated, objectMeta %+v -> %+v.", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)
-		rsc.enqueueRS(rs)
-		// TODO: MinReadySeconds in the Pod will generate an Available condition to be added in
-		// the Pod status which in turn will trigger a requeue of the owning replica set thus
-		// having its status updated with the newly available replica. For now, we can fake the
-		// update by resyncing the controller MinReadySeconds after the it is requeued because
-		// a Pod transitioned to Ready.
-		// Note that this still suffers from #29229, we are just moving the problem one level
-		// "closer" to kubelet (from the deployment to the replica set controller).
-		if !podutil.IsPodReady(oldPod) && podutil.IsPodReady(curPod) && rs.Spec.MinReadySeconds > 0 {
+    // If it has a ControllerRef, that's all that matters.
+    if curControllerRef != nil {
+        rs := rsc.resolveControllerRef(curPod.Namespace, curControllerRef)
+        if rs == nil {
+            return
+        }
+        klog.V(4).Infof("Pod %s updated, objectMeta %+v -> %+v.", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)
+        rsc.enqueueRS(rs)
+        // TODO: MinReadySeconds in the Pod will generate an Available condition to be added in
+        // the Pod status which in turn will trigger a requeue of the owning replica set thus
+        // having its status updated with the newly available replica. For now, we can fake the
+        // update by resyncing the controller MinReadySeconds after the it is requeued because
+        // a Pod transitioned to Ready.
+        // Note that this still suffers from #29229, we are just moving the problem one level
+        // "closer" to kubelet (from the deployment to the replica set controller).
+        if !podutil.IsPodReady(oldPod) && podutil.IsPodReady(curPod) && rs.Spec.MinReadySeconds > 0 {
             // oldPod notready并且curPod ready，证明本次pod的update至少有status的更新
             // 如果MinReadySeconds等于0(默认值)，则需要马上更新，则需要马上将rs中available + 1，这一步会在当前函数的上一个rsc.enqueueRS(rs)中体现
             // 如果MinReadySeconds大于0，则需在等待(MinReadySeconds + 1)秒之后再rs中available + 1(这里加1s是为了避免偏差)。
             // 当前函数的上一个rsc.enqueueRS(rs)会自动判断这里的逻辑觉得要不要available + 1
-			klog.V(2).Infof("%v %q will be enqueued after %ds for availability check", rsc.Kind, rs.Name, rs.Spec.MinReadySeconds)
-			// Add a second to avoid milliseconds skew in AddAfter.
-			// See https://github.com/kubernetes/kubernetes/issues/39785#issuecomment-279959133 for more info.
-			rsc.enqueueRSAfter(rs, (time.Duration(rs.Spec.MinReadySeconds)*time.Second)+time.Second)
-		}
-		return
-	}
+            klog.V(2).Infof("%v %q will be enqueued after %ds for availability check", rsc.Kind, rs.Name, rs.Spec.MinReadySeconds)
+            // Add a second to avoid milliseconds skew in AddAfter.
+            // See https://github.com/kubernetes/kubernetes/issues/39785#issuecomment-279959133 for more info.
+            rsc.enqueueRSAfter(rs, (time.Duration(rs.Spec.MinReadySeconds)*time.Second)+time.Second)
+        }
+        return
+    }
 
-	// Otherwise, it's an orphan. If anything changed, sync matching controllers
-	// to see if anyone wants to adopt it now.
-	if labelChanged || controllerRefChanged {
-		rss := rsc.getPodReplicaSets(curPod)
-		if len(rss) == 0 {
-			return
-		}
-		klog.V(4).Infof("Orphan Pod %s updated, objectMeta %+v -> %+v.", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)
-		for _, rs := range rss {
-			rsc.enqueueRS(rs)
-		}
-	}
+    // Otherwise, it's an orphan. If anything changed, sync matching controllers
+    // to see if anyone wants to adopt it now.
+    if labelChanged || controllerRefChanged {
+        rss := rsc.getPodReplicaSets(curPod)
+        if len(rss) == 0 {
+            return
+        }
+        klog.V(4).Infof("Orphan Pod %s updated, objectMeta %+v -> %+v.", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)
+        for _, rs := range rss {
+            rsc.enqueueRS(rs)
+        }
+    }
 }
 ```
 
@@ -136,15 +136,15 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{})
 // 1. minReadySeconds == 0, or
 // 2. LastTransitionTime (is set) + minReadySeconds < current time
 func IsPodAvailable(pod *v1.Pod, minReadySeconds int32, now metav1.Time) bool {
-	if !IsPodReady(pod) {
-		return false
-	}
+    if !IsPodReady(pod) {
+        return false
+    }
 
-	c := GetPodReadyCondition(pod.Status)
-	minReadySecondsDuration := time.Duration(minReadySeconds) * time.Second
-	if minReadySeconds == 0 || !c.LastTransitionTime.IsZero() && c.LastTransitionTime.Add(minReadySecondsDuration).Before(now.Time) {
-		return true
-	}
-	return false
+    c := GetPodReadyCondition(pod.Status)
+    minReadySecondsDuration := time.Duration(minReadySeconds) * time.Second
+    if minReadySeconds == 0 || !c.LastTransitionTime.IsZero() && c.LastTransitionTime.Add(minReadySecondsDuration).Before(now.Time) {
+        return true
+    }
+    return false
 }
 ```
