@@ -125,9 +125,9 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{})
 
 
 ### 如何判断一个pod是否available
-同时满足两个条件
-1、pod已经ready
-2、deployment没设置minReadySeconds或者设置了minReadySeconds但是pod ready持续的时间已经超过了minReadySeconds
+同时满足两个条件：
+1. pod已经ready
+2. deployment没设置minReadySeconds或者设置了minReadySeconds但是pod ready持续的时间已经超过了minReadySeconds
 ```golang
 // kubernetes/pkg/api/v1/pod/util.go +281
 // IsPodAvailable returns true if a pod is available; false otherwise.
