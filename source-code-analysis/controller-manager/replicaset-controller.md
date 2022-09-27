@@ -122,6 +122,68 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{})
     }
 }
 ```
+### pod的删除
+```golang
+// When a pod is deleted, enqueue the replica set that manages the pod and update its expectations.
+// obj could be an *v1.Pod, or a DeletionFinalStateUnknown marker item.
+func (rsc *ReplicaSetController) deletePod(obj interface{}) {
+    pod, ok := obj.(*v1.Pod)
+
+    // When a delete is dropped, the relist will notice a pod in the store not
+    // in the list, leading to the insertion of a tombstone object which contains
+    // the deleted key/value. Note that this value might be stale. If the pod
+    // changed labels the new ReplicaSet will not be woken up till the periodic resync.
+    if !ok {
+        tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+        if !ok {
+            utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %+v", obj))
+            return
+        }
+        pod, ok = tombstone.Obj.(*v1.Pod)
+        if !ok {
+            utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a pod %#v", obj))
+            return
+        }
+    }
+
+    controllerRef := metav1.GetControllerOf(pod)
+    if controllerRef == nil {
+        // No controller should care about orphans being deleted.
+        return
+    }
+    rs := rsc.resolveControllerRef(pod.Namespace, controllerRef)
+    if rs == nil {
+        return
+    }
+    rsKey, err := controller.KeyFunc(rs)
+    if err != nil {
+        utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", rs, err))
+        return
+    }
+    klog.V(4).Infof("Pod %s/%s deleted through %v, timestamp %+v: %#v.", pod.Namespace, pod.Name, utilruntime.GetCaller(), pod.DeletionTimestamp, pod)
+    rsc.expectations.DeletionObserved(rsKey, controller.PodKey(pod))
+    rsc.queue.Add(rsKey)
+}
+```
+### rs的expectations机制
+rs的controller维护了一个```ControllerExpectations```的数据结构，存储的对象类型为```ControlleeExpectations```，其中key值为```<rs_namespace>/<rs_name>```
+```golang
+// ControllerExpectations is a cache mapping controllers to what they expect to see before being woken up for a sync.
+type ControllerExpectations struct {
+    cache.Store
+}
+
+// ControlleeExpectations track controllee creates/deletes.
+type ControlleeExpectations struct {
+    // Important: Since these two int64 fields are using sync/atomic, they have to be at the top of the struct due to a bug on 32-bit platforms
+    // See: https://golang.org/pkg/sync/atomic/ for more information
+    add       int64
+    del       int64
+    key       string
+    timestamp time.Time
+}
+```
+
 
 
 ### 如何判断一个pod是否available
@@ -144,6 +206,64 @@ func IsPodAvailable(pod *v1.Pod, minReadySeconds int32, now metav1.Time) bool {
     minReadySecondsDuration := time.Duration(minReadySeconds) * time.Second
     if minReadySeconds == 0 || !c.LastTransitionTime.IsZero() && c.LastTransitionTime.Add(minReadySecondsDuration).Before(now.Time) {
         return true
+    }
+    return false
+}
+```
+
+### 如果rs的replicas超过预期，k8s筛选删除pod的逻辑
+根据下面的排序条件，从上到下进行排序，满足其中一个条件则排序完成：
+1. 优先删除```unassigned```的pod，即没有绑定到node的pod
+2. 优先删除处于```pending```状态的pod，然后是```unknow```，最后是```running```状态
+3. 优先删除notready的pod
+4. 按同node上所属replicaset的pod数量排序，优先删除所属replicaset的pod数量多的node上的pod
+5. 优先删除pod ready持续时间最短的pod
+6. 优先删除pod中容器重启次数较多的pod
+7. 优先删除pod创建时间最短的pod
+```golang
+// kubernetes/pkg/controller/controller_utils.go +834
+// Less compares two pods with corresponding ranks and returns true if the first
+// one should be preferred for deletion.
+func (s ActivePodsWithRanks) Less(i, j int) bool {
+    // 1. Unassigned < assigned
+    // If only one of the pods is unassigned, the unassigned one is smaller
+    if s.Pods[i].Spec.NodeName != s.Pods[j].Spec.NodeName && (len(s.Pods[i].Spec.NodeName) == 0 || len(s.Pods[j].Spec.NodeName) == 0) {
+        return len(s.Pods[i].Spec.NodeName) == 0
+    }
+    // 2. PodPending < PodUnknown < PodRunning
+    if podPhaseToOrdinal[s.Pods[i].Status.Phase] != podPhaseToOrdinal[s.Pods[j].Status.Phase] {
+        return podPhaseToOrdinal[s.Pods[i].Status.Phase] < podPhaseToOrdinal[s.Pods[j].Status.Phase]
+    }
+    // 3. Not ready < ready
+    // If only one of the pods is not ready, the not ready one is smaller
+    if podutil.IsPodReady(s.Pods[i]) != podutil.IsPodReady(s.Pods[j]) {
+        return !podutil.IsPodReady(s.Pods[i])
+    }
+    // 4. Doubled up < not doubled up
+    // If one of the two pods is on the same node as one or more additional
+    // ready pods that belong to the same replicaset, whichever pod has more
+    // colocated ready pods is less
+    if s.Rank[i] != s.Rank[j] {
+        return s.Rank[i] > s.Rank[j]
+    }
+    // TODO: take availability into account when we push minReadySeconds information from deployment into pods,
+    //       see https://github.com/kubernetes/kubernetes/issues/22065
+    // 5. Been ready for empty time < less time < more time
+    // If both pods are ready, the latest ready one is smaller
+    if podutil.IsPodReady(s.Pods[i]) && podutil.IsPodReady(s.Pods[j]) {
+        readyTime1 := podReadyTime(s.Pods[i])
+        readyTime2 := podReadyTime(s.Pods[j])
+        if !readyTime1.Equal(readyTime2) {
+            return afterOrZero(readyTime1, readyTime2)
+        }
+    }
+    // 6. Pods with containers with higher restart counts < lower restart counts
+    if maxContainerRestarts(s.Pods[i]) != maxContainerRestarts(s.Pods[j]) {
+        return maxContainerRestarts(s.Pods[i]) > maxContainerRestarts(s.Pods[j])
+    }
+    // 7. Empty creation time pods < newer pods < older pods
+    if !s.Pods[i].CreationTimestamp.Equal(&s.Pods[j].CreationTimestamp) {
+        return afterOrZero(&s.Pods[i].CreationTimestamp, &s.Pods[j].CreationTimestamp)
     }
     return false
 }
