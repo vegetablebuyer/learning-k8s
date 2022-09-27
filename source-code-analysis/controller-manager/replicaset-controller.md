@@ -166,6 +166,8 @@ func (rsc *ReplicaSetController) deletePod(obj interface{}) {
 }
 ```
 ### rs的expectations机制
+expectations的引入是为了控制多个pod的创建/删除分批次串行进行，避免多个调谐任务并发执行造成pod的重复创建/删除。如果不引入expectations，每一个rs/pod的增删改查都会触发调谐任务。\
+过期时间机制则避免了某个调谐任务阻塞不能完成而导致rs的副本数永远无法达到预期的问题。\
 rs的controller维护了一个```ControllerExpectations```的数据结构，存储的对象类型为```ControlleeExpectations```，其中key值为```<rs_namespace>/<rs_name>```
 ```golang
 // ControllerExpectations is a cache mapping controllers to what they expect to see before being woken up for a sync.
@@ -182,6 +184,48 @@ type ControlleeExpectations struct {
     key       string
     timestamp time.Time
 }
+```
+每次rs要进行reconcile之前都需要先调用```rsc.expectations.SatisfiedExpectations(key)```来判断该rs的上一次reconcile是否已经***满足预期*** \
+满足预期的条件（达成下面任一即可）：
+1. 不存在```<rs_namespace>/<rs_name>```的对象，证明是第一次触发reconcile
+2. rs对应的Expectations的add/del值小于等于0
+3. rs对应的Expectations存在超过5分钟，也就是上一次reconcile之后已经过了5分钟
+
+```golang
+func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
+	...
+	rsNeedsSync := rsc.expectations.SatisfiedExpectations(key)
+	...
+	var manageReplicasErr error
+	if rsNeedsSync && rs.DeletionTimestamp == nil {
+        // 只有满足rs不处于删除状态且SatisfiedExpectations返回true才会进行调谐
+        // 在这里rs的调谐就是让副本数符合预期
+		manageReplicasErr = rsc.manageReplicas(filteredPods, rs)
+	}
+	...
+}
+
+func (r *ControllerExpectations) SatisfiedExpectations(controllerKey string) bool {
+	if exp, exists, err := r.GetExpectations(controllerKey); exists {
+		if exp.Fulfilled() {
+			klog.V(4).Infof("Controller expectations fulfilled %#v", exp)
+			return true
+		} else if exp.isExpired() {
+			klog.V(4).Infof("Controller expectations expired %#v", exp)
+			return true
+		} else {
+			klog.V(4).Infof("Controller still waiting on expectations %#v", exp)
+			return false
+		}
+	} else if err != nil {
+		klog.V(2).Infof("Error encountered while checking expectations %#v, forcing sync", err)
+	} else {
+		
+		klog.V(4).Infof("Controller %v either never recorded expectations, or the ttl expired.", controllerKey)
+	}
+	return true
+}
+
 ```
 
 
