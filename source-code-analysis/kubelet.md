@@ -44,23 +44,23 @@ func NewDockerKeyring() DockerKeyring {
 var providers = make(map[string]DockerConfigProvider)
 
 func RegisterCredentialProvider(name string, provider DockerConfigProvider) {
-	providersMutex.Lock()
-	defer providersMutex.Unlock()
-	_, found := providers[name]
-	if found {
-		klog.Fatalf("Credential provider %q was registered twice", name)
-	}
-	klog.V(4).Infof("Registered credential provider %q", name)
-	providers[name] = provider
+    providersMutex.Lock()
+    defer providersMutex.Unlock()
+    _, found := providers[name]
+    if found {
+        klog.Fatalf("Credential provider %q was registered twice", name)
+    }
+    klog.V(4).Infof("Registered credential provider %q", name)
+    providers[name] = provider
 }
 
 // kubernetes/pkg/credentialprovider/plugins.go
 func init() {
-	RegisterCredentialProvider(".dockercfg",
-		&CachingDockerConfigProvider{
-			Provider: &defaultDockerConfigProvider{},
-			Lifetime: 5 * time.Minute,
-		})
+    RegisterCredentialProvider(".dockercfg",
+        &CachingDockerConfigProvider{
+            Provider: &defaultDockerConfigProvider{},
+            Lifetime: 5 * time.Minute,
+        })
 }
 
 ```
@@ -69,56 +69,56 @@ func init() {
 // kubernetes/pkg/credentialprovider/provider.go
 // Enabled implements dockerConfigProvider
 func (d *defaultDockerConfigProvider) Enabled() bool {
-	return true
+    return true
 }
 
 // Provide implements dockerConfigProvider
 func (d *defaultDockerConfigProvider) Provide(image string) DockerConfig {
-	// Read the standard Docker credentials from .dockercfg
-	if cfg, err := ReadDockerConfigFile(); err == nil {
-		return cfg
-	} else if !os.IsNotExist(err) {
-		klog.V(4).Infof("Unable to parse Docker config file: %v", err)
-	}
-	return DockerConfig{}
+    // Read the standard Docker credentials from .dockercfg
+    if cfg, err := ReadDockerConfigFile(); err == nil {
+        return cfg
+    } else if !os.IsNotExist(err) {
+        klog.V(4).Infof("Unable to parse Docker config file: %v", err)
+    }
+    return DockerConfig{}
 }
 ```
 每次kubelet拉取镜像会调用```providersDockerKeyring```的```lookup()```方法，进而调用```Provider```的```Provide()```方法来查找镜像的认证
 ```golang
 // kubernetes/pkg/kubelet/kuberuntime/kuberuntime_image.go +31
 func (m *kubeGenericRuntimeManager) PullImage(image kubecontainer.ImageSpec, pullSecrets []v1.Secret, podSandboxConfig *runtimeapi.PodSandboxConfig) (string, error) {
-	img := image.Image
-	repoToPull, _, _, err := parsers.ParseImageName(img)
-	...
+    img := image.Image
+    repoToPull, _, _, err := parsers.ParseImageName(img)
+    ...
 
-	imgSpec := toRuntimeAPIImageSpec(image)
+    imgSpec := toRuntimeAPIImageSpec(image)
 
-	creds, withCredentials := keyring.Lookup(repoToPull)
-	...
+    creds, withCredentials := keyring.Lookup(repoToPull)
+    ...
 
     // some pulling action
 }
 
 // kubernetes/pkg/credentialprovider/keyring.go +263
 func (dk *providersDockerKeyring) Lookup(image string) ([]AuthConfig, bool) {
-	keyring := &BasicDockerKeyring{}
+    keyring := &BasicDockerKeyring{}
 
-	for _, p := range dk.Providers {
-		keyring.Add(p.Provide(image))
-	}
+    for _, p := range dk.Providers {
+        keyring.Add(p.Provide(image))
+    }
 
-	return keyring.Lookup(image)
+    return keyring.Lookup(image)
 }
 
 // kubernetes/pkg/credentialprovider/provider.go +76
 // Provide implements dockerConfigProvider
 func (d *defaultDockerConfigProvider) Provide(image string) DockerConfig {
-	// Read the standard Docker credentials from .dockercfg
-	if cfg, err := ReadDockerConfigFile(); err == nil {
-		return cfg
-	} else if !os.IsNotExist(err) {
-		klog.V(4).Infof("Unable to parse Docker config file: %v", err)
-	}
-	return DockerConfig{}
+    // Read the standard Docker credentials from .dockercfg
+    if cfg, err := ReadDockerConfigFile(); err == nil {
+        return cfg
+    } else if !os.IsNotExist(err) {
+        klog.V(4).Infof("Unable to parse Docker config file: %v", err)
+    }
+    return DockerConfig{}
 }
 ```
