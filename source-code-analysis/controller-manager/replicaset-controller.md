@@ -228,6 +228,17 @@ func (r *ControllerExpectations) SatisfiedExpectations(controllerKey string) boo
 
 ```
 
+假如创建了rs```{namespace: default, name: test-rs, replicas: 1000}```，因为找不到```<default/test-rs>```的```ControlleeExpectations```，controller会创建一个，如下：
+```golang
+type ControlleeExpectations struct {
+    add       500  // 500为hardcode在代码中的值
+    del       0
+    key       default/test-rs
+    timestamp Now()
+}
+```
+之后每一次该rs的pod被创建处理之后都会调用```rsc.expectations.CreationObserved("default/test-rs")```将add减去1。\
+直到500个pod被创建出来或者超过了5分钟，则```exp.Fulfilled```或```exp.isExpired```会返回true。下一次调谐才可以进行。
 
 
 ### 如何判断一个pod是否available
