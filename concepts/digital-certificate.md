@@ -132,8 +132,8 @@ root@hostname:/etc/kubernetes/pki# tree
 ├── front-proxy-ca.key
 ├── front-proxy-client.crt
 ├── front-proxy-client.key
-├── sa.key
-└── sa.pub
+├── sa.key # 对sericeaccount token进行签名加密的私钥
+└── sa.pub # 对seviceaccount token做解密的公钥
 ```
 
 
@@ -185,4 +185,12 @@ main()
 }
 
 main "$@"
+```
+#### jwt token的结构
+jwt token的结构包含三部分，分别为: Header,Payload,Signature，之间用"."分隔，所以一般形式为xxx.yyy.zzz。
+```shell script
+kubectl get secrets -n monitor-platform szdevops-reader-token-zwzs7 -o  jsonpath='{.data.token}' | base64 -d|awk -F '.' '{print $1"\n"$2"\n"$3}'
+eyJhbGciOiJSUzI1NiIsImtpZCI6Im4yQmdJVFFhQmhtMndkVE1zeTlEeGc3T000a2lSYlRZMlFrUlJ3ZXlPamcifQ
+eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJtb25pdG9yLXBsYXRmb3JtIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6InN6ZGV2b3BzLXJlYWRlci10b2tlbi16d3pzNyIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJzemRldm9wcy1yZWFkZXIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC51aWQiOiI0MzQyN2E0OS04ZmNlLTRjZjUtYTJmNy1hOTBlNjU1MTdiOGMiLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6bW9uaXRvci1wbGF0Zm9ybTpzemRldm9wcy1yZWFkZXIifQ
+W-6EseVl_djmFSIqkffcvIZkqOyt3pR25jeVA3AfHLWoCFJ1h0ZLp9qD2NRMCyhGwarw8vQdhSrr_ZmV66Mk7zJsr0z0PYsK3WViRUB_X0qNwv51sY9NvjaF-CT7pYBWsLfngLCG5Xr8_Vj4cG1m9MRhOFJM3L0HW4ITcye3iga1sGrfoWGdRu2qyBHDCSCKWAJD7tquEYv6WJDOdVYc9_cajfjxU3W9D2ex2267olgWGervpQycBL4pqkSheJHYQeK6q2_Dud1gLXVgKPCS6XsQ1T5wMIksc9eS0vrONbUGwfY1-M4NwG46x1wUE6SHF33oQ9CtOMepK6nVyOJ1Ng
 ```
