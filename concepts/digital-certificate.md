@@ -192,18 +192,20 @@ jwt token的结构包含三部分，分别为: Header,Payload,Signature，之间
 root@hostname:/# kubectl get secrets -n monitor-platform szdevops-reader-token-zwzs7 -o jsonpath='{.data.token}' | \
 base64 -d | \
 awk -F '.' '{print $1"\n"$2"\n"$3}'
-${Header}
-${Payload}
-${Signature}
+${HeaderBase64Encode}
+${PayloadBase64Encode}
+${SignatureBase64Encode}
 ```
 
 ```shell script
-root@hostname:/# echo ${Header} | base64 -d
+root@hostname:/# Header=`echo ${HeaderBase64Encode} | base64 -d`
+root@hostname:/# echo ${Header}
 {
     "alg": "RS256",
     "kid": "n2BgITQaBhm2wdTMsy9Dxg7OM4kiRbTY2QkRRweyOjg"
 }
-root@hostname:/# echo ${Payload} | base64 -d
+root@hostname:/# Payload=`echo ${PayloadBase64Encode} | base64 -d`
+root@hostname:/# echo ${Payload}
 {
     "iss": "kubernetes/serviceaccount",
     "kubernetes.io/serviceaccount/namespace": "monitor-platform",
@@ -213,3 +215,15 @@ root@hostname:/# echo ${Payload} | base64 -d
     "sub": "system:serviceaccount:monitor-platform:szdevops-reader"
 }
 ```
+
+#### 生成jwt token的步骤
+1. value1 = base64Encode(${Header})
+2. value2 = base64Encode(${Payload})
+3. value3 = hash(value1 + "." + value2)
+4. Signature = 私钥加密(value3) 
+> 这里的私钥是在 controller-manager指定的参数 --service-account-private-key-file=/etc/kubernetes/pki/sa.key
+5. token = base64(base64Encode(${Header}) + "." + base64Encode(${Payload}) + "." + base64Encode(${Signature}))
+
+#### k8s中jwt token的验证过程
+
+
