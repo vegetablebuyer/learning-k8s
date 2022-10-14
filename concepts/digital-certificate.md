@@ -107,3 +107,82 @@ Certificate:
 ```
 
 ## kubernetes的证书
+k8s中的https访问都是双向认证，客户端需要认证服务的证书，反之服务端也需要认证客户端的证书。
+```shell script
+root@hostname:/etc/kubernetes/pki# tree
+.
+├── apiserver.crt  # apiserver服务端的数字证书，包含了公钥
+├── apiserver-etcd-client.crt  # apiserver访问etcd的数字证书，包含了公钥
+├── apiserver-etcd-client.key  # apiserver访问etcd的私钥
+├── apiserver.key  # apiserver服务端的私钥
+├── apiserver-kubelet-client.crt  # apiserver访问kubelet的数字证书，包含了公钥
+├── apiserver-kubelet-client.key  # apiserver访问kubelet的私钥
+├── ca.crt  # 给apiserver签证书的CA的数字证书，包含了公钥
+├── ca.key  # 给apiserver签证书的CA的私钥
+├── etcd
+│   ├── ca.crt  # 给etcd签证书的CA的数字证书，包含了公钥
+│   ├── ca.key  # 给etcd签证书的CA的私钥
+│   ├── healthcheck-client.crt  
+│   ├── healthcheck-client.key  
+│   ├── peer.crt  # peer之间互相访问的数字证书，包含了公钥
+│   ├── peer.key  # peer之间互相访问的私钥
+│   ├── server.crt  # etcd服务端的数字证书，包含了公钥
+│   └── server.key  # etcd服务端的私钥
+├── front-proxy-ca.crt
+├── front-proxy-ca.key
+├── front-proxy-client.crt
+├── front-proxy-client.key
+├── sa.key
+└── sa.pub
+```
+
+
+### jwt token的解码
+```shell script
+#!/bin/bash
+
+# base64url解码
+decode_base64_url() {
+  LEN=$((${#1} % 4))
+  RESULT="$1"
+  if [ $LEN -eq 2 ]; then
+    RESULT+='=='
+  elif [ $LEN -eq 3 ]; then
+    RESULT+='='
+  fi
+  echo "$RESULT" | tr '_-' '/+' | base64 -d
+}
+
+# 解码JWT
+decode_jwt()
+{
+  JWT_RAW=$1
+  for line in $(echo "$JWT_RAW" | awk -F '.' '{print $1,$2}'); do
+    RESULT=$(decode_base64_url "$line")
+    echo "$RESULT" | python -m json.tool
+  done
+}
+
+# 获取k8s sa token
+get_k8s_sa_token()
+{
+  NAMESPACE=$1
+  NAME=$2
+  TOKEN_NAME=$(kubectl get sa -n "$NAMESPACE" "$NAME" -o jsonpath='{.secrets[0].name}')
+  kubectl get secret -n "$NAMESPACE" "${TOKEN_NAME}" -o jsonpath='{.data.token}' | base64 -d
+}
+
+main()
+{
+  NAMESPACE=$1
+  NAME=$2
+  if [ -z $NAMESPACE ] || [ -z $NAME ]; then
+    echo "Usage: $0 <secret_namespace> <secret_name>"
+    exit 1
+  fi
+  TOKEN=$(get_k8s_sa_token "$NAMESPACE" "$NAME")
+  decode_jwt "$TOKEN"
+}
+
+main "$@"
+```
