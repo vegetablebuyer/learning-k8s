@@ -46,7 +46,7 @@ https双向认证的过程：
 10. 服务端和客户端在后续通讯过程中就使用这个密钥R进行通信了。
 
 ### 查看数字证书的内容
-```shell script
+```bash
 root@hostname:/path/# openssl x509 -in apiserver.crt -text -noout
 Certificate:
     Data:
