@@ -34,8 +34,15 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 
         instance, err := result.Instance()
         ...
+        if src, ok := instance.(plugin.Service); ok {
+            grpcServices = append(grpcServices, src)
+        }
     }
-
+    for _, service := range grpcServices {
+        if err := service.Register(grpcServer); err != nil {
+            return nil, err
+        }
+    }
 }
 
 // containerd/plugin/plugin.go +89
