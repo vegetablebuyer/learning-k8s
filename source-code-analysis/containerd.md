@@ -34,6 +34,10 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 
         instance, err := result.Instance()
         ...
+        // 检查插件有没有实现Register()，如果有，就可以作为grpc的服务注册
+        // type Service interface {
+        //    Register(*grpc.Server) error
+        // }
         if src, ok := instance.(plugin.Service); ok {
             grpcServices = append(grpcServices, src)
         }
