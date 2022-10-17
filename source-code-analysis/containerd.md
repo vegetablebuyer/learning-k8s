@@ -68,7 +68,7 @@ func (r *Registration) Init(ic *InitContext) *Plugin {
 }
 
 ```
-加载插件的函数具体内容
+LoadPlugins()加载插件的函数具体内容
 ```golang
 // containerd/services/server/server.go +304
 func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Registration, error) {
@@ -112,4 +112,36 @@ func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Regis
 	// 整理插件之间的依赖关系，将被依赖的插件放在依赖的插件之前
 	return plugin.Graph(filter(config.DisabledPlugins)), nil
 }
+```
+其他的插件的初始化跟加载，此部分代码在containerd的主程序二进制代码的入口
+```golang
+package main
+
+// containerd/cmd/containerd/builtins.go
+// register containerd builtins here
+import (
+    _ "github.com/containerd/containerd/diff/walking/plugin"
+    _ "github.com/containerd/containerd/gc/scheduler"
+    _ "github.com/containerd/containerd/runtime/restart/monitor"
+    _ "github.com/containerd/containerd/services/containers"
+    _ "github.com/containerd/containerd/services/content"
+    _ "github.com/containerd/containerd/services/diff"
+    _ "github.com/containerd/containerd/services/events"
+    _ "github.com/containerd/containerd/services/healthcheck"
+    _ "github.com/containerd/containerd/services/images"
+    _ "github.com/containerd/containerd/services/introspection"
+    _ "github.com/containerd/containerd/services/leases"
+    _ "github.com/containerd/containerd/services/namespaces"
+    _ "github.com/containerd/containerd/services/opt"
+    _ "github.com/containerd/containerd/services/snapshots"
+    _ "github.com/containerd/containerd/services/tasks"
+    _ "github.com/containerd/containerd/services/version"
+)
+
+// containerd/cmd/containerd/builtins_cri.go
+package main
+
+import _ "github.com/containerd/containerd/pkg/cri"
+
+// 其他的包import需要看containerd/cmd/containerd/下面的代码
 ```
