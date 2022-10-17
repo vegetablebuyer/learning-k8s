@@ -105,7 +105,7 @@ func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Regis
             if err := mdb.Init(ic.Context); err != nil {
                 return nil, err
             }
-                return mdb, nil
+            return mdb, nil
 		},
 	})
 
