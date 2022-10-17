@@ -116,7 +116,7 @@ func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Regis
         },
     })
     ... 
-    // 整理插件之间的依赖关系，将被依赖的插件放在依赖的插件之前
+    // 整理插件之间的依赖关系，返回一个插件的列表，将被依赖的插件放在依赖的插件之前
     return plugin.Graph(filter(config.DisabledPlugins)), nil
 }
 ```
