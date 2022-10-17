@@ -41,15 +41,15 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 // containerd/plugin/plugin.go +89
 // Registration contains information for registering a plugin
 type Registration struct {
-    // Type of the plugin
+    // Type表示插件的类型
     Type Type
     // ID of the plugin
     ID string
     // Config specific to the plugin
     Config interface{}
-    // Requires is a list of plugins that the registered plugin requires to be available
+    // Requires 表示当前插件依赖的插件的类型
     Requires []Type
-
+    // 插件的初始化函数
     InitFn func(*InitContext) (interface{}, error)
 	// Disable the plugin from loading
     Disable bool
@@ -67,4 +67,52 @@ func (r *Registration) Init(ic *InitContext) *Plugin {
     }
 }
 
+```
+加载插件的函数具体内容
+```golang
+// containerd/services/server/server.go +304
+func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Registration, error) {
+    // load all plugins into containerd
+	...
+	// 除了下面两个插件需要手动加载之后，其他的插件都是通过包的init()函数加载
+    plugin.Register(&plugin.Registration{
+        Type: plugin.ContentPlugin,
+        ID:   "content",
+        InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+            ic.Meta.Exports["root"] = ic.Root
+            return local.NewStore(ic.Root)
+        },
+    })
+    // containerd的源数据用boltdb存储
+	plugin.Register(&plugin.Registration{
+		Type: plugin.MetadataPlugin,
+		ID:   "bolt",
+		Requires: []plugin.Type{
+			plugin.ContentPlugin,
+			plugin.SnapshotPlugin,
+		},
+		Config: &srvconfig.BoltConfig{
+			ContentSharingPolicy: srvconfig.SharingPolicyShared,
+		},
+		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+			...
+            path := filepath.Join(ic.Root, "meta.db")
+            ic.Meta.Exports["path"] = path
+            
+            db, err := bolt.Open(path, 0644, nil)
+            ...
+            mdb := metadata.NewDB(db, cs.(content.Store), snapshotters, dbopts...)
+            if err := mdb.Init(ic.Context); err != nil {
+                return nil, err
+            }
+                return mdb, nil
+		},
+	})
+
+	... 
+
+
+	// 整理插件之间的依赖关系，将被依赖的插件放在依赖的插件之前
+	return plugin.Graph(filter(config.DisabledPlugins)), nil
+}
 ```
