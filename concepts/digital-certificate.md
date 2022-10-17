@@ -225,5 +225,31 @@ root@hostname:/# echo ${Payload}
 5. token = base64(base64Encode(${Header}) + "." + base64Encode(${Payload}) + "." + base64Encode(${Signature}))
 
 #### k8s中jwt token的验证过程
+生成jwt token步骤的逆过程，其中Signature用公钥解密
+
+### kubeconfig认证
+kubeconfig文件的内容
+```shell script
+apiVersion: v1
+clusters:  # k8s集群的信息，可以配置多个集群
+- cluster:
+    certificate-authority-data: "${certificate-authority-data}"  # CA的证书内容，用于验证apiserver，经过了base64的编码
+    server: https://${apiserver_ip}:6443
+  name: kubernetes
+contexts:  # 上下文信息，表示用某个用户访问某个集群
+- context:
+    cluster: kubernetes
+    user: kubernetes-admin
+    namespace: default
+  name: kubernetes-admin@kubernetes
+current-context: kubernetes-admin@kubernetes  # 该kubeconfig默认使用的上下文
+kind: Config
+preferences: {}
+users:  # 用户信息
+- name: kubernetes-admin
+  user:
+    client-certificate-data: "${client-certificate-data}"  # 用户的数字证书，包含公钥
+    client-key-data: "${client-key-data}"  # 用户的私钥
+```
 
 
