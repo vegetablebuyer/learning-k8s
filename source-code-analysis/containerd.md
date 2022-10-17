@@ -80,8 +80,8 @@ LoadPlugins()加载插件的函数具体内容
 // containerd/services/server/server.go +304
 func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Registration, error) {
     // load all plugins into containerd
-	...
-	// 除了下面两个插件需要手动加载之后，其他的插件都是通过包的init()函数加载
+    ...
+    // 除了下面两个插件需要手动加载之后，其他的插件都是通过包的init()函数加载
     plugin.Register(&plugin.Registration{
         Type: plugin.ContentPlugin,
         ID:   "content",
