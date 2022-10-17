@@ -84,18 +84,18 @@ func LoadPlugins(ctx context.Context, config *srvconfig.Config) ([]*plugin.Regis
         },
     })
     // containerd的源数据用boltdb存储
-	plugin.Register(&plugin.Registration{
-		Type: plugin.MetadataPlugin,
-		ID:   "bolt",
-		Requires: []plugin.Type{
-			plugin.ContentPlugin,
-			plugin.SnapshotPlugin,
-		},
-		Config: &srvconfig.BoltConfig{
-			ContentSharingPolicy: srvconfig.SharingPolicyShared,
-		},
-		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
-			...
+    plugin.Register(&plugin.Registration{
+        Type: plugin.MetadataPlugin,
+        ID:   "bolt",
+        Requires: []plugin.Type{
+            plugin.ContentPlugin,
+            plugin.SnapshotPlugin,
+        },
+        Config: &srvconfig.BoltConfig{
+            ContentSharingPolicy: srvconfig.SharingPolicyShared,
+        },
+        InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+            ...
             path := filepath.Join(ic.Root, "meta.db")
             ic.Meta.Exports["path"] = path
             
