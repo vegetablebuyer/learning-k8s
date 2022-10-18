@@ -295,12 +295,12 @@ func New(config ...Opt) (CNI, error) {
 
 // 所以Status()函数检查的逻辑很简单，只要c.networks小于2，证明cni插件的初始化就没有完成
 func (c *libcni) Status() error {
-	c.RLock()
-	defer c.RUnlock()
-	if len(c.networks) < c.networkCount {
-		return ErrCNINotInitialized
-	}
-	return nil
+    c.RLock()
+    defer c.RUnlock()
+    if len(c.networks) < c.networkCount {
+        return ErrCNINotInitialized
+    }
+    return nil
 }
 
 ```
@@ -315,47 +315,47 @@ func (c *criService) cniLoadOptions() []cni.Opt {
 ```golang
 
 // containerd/vendor/github.com/containerd/go-cni/opts.go +80
- func WithLoNetwork(c *libcni) error {
- 	loConfig, _ := cnilibrary.ConfListFromBytes([]byte(`{
- "cniVersion": "0.3.1",
- "name": "cni-loopback",
- "plugins": [{
-   "type": "loopback"
- }]
- }`))
- 
- 	c.networks = append(c.networks, &Network{
- 		cni:    c.cniConfig,
- 		config: loConfig,
- 		ifName: "lo",
- 	})
- 	return nil
+func WithLoNetwork(c *libcni) error {
+    loConfig, _ := cnilibrary.ConfListFromBytes([]byte(`{
+   "cniVersion": "0.3.1",
+   "name": "cni-loopback",
+   "plugins": [{
+      "type": "loopback"
+    }]}
+    `))
+    
+    c.networks = append(c.networks, &Network{
+        cni:    c.cniConfig,
+        config: loConfig,
+        ifName: "lo",
+    })
+    return nil
  }
 
 func WithDefaultConf(c *libcni) error {
-	return loadFromConfDir(c, c.pluginMaxConfNum)
+    return loadFromConfDir(c, c.pluginMaxConfNum)
 }
 
 func loadFromConfDir(c *libcni, max int) error {
-	files, err := cnilibrary.ConfFiles(c.pluginConfDir, []string{".conf", ".conflist", ".json"})
-	...
-	var networks []*Network
-	for _, confFile := range files {
-		...
-		networks = append(networks, &Network{
-			cni:    c.cniConfig,
-			config: confList,
-			ifName: getIfName(c.prefix, i),
-		})
-		i++
-		if i == max {
-			break
-		}
-	}
-	if len(networks) == 0 {
-		return errors.Wrapf(ErrCNINotInitialized, "no valid networks found in %s", c.pluginDirs)
-	}
-	c.networks = append(c.networks, networks...)
-	return nil
+    files, err := cnilibrary.ConfFiles(c.pluginConfDir, []string{".conf", ".conflist", ".json"})
+    ...
+    var networks []*Network
+    for _, confFile := range files {
+        ...
+        networks = append(networks, &Network{
+            cni:    c.cniConfig,
+            config: confList,
+            ifName: getIfName(c.prefix, i),
+        })
+        i++
+        if i == max {
+            break
+        }
+    }
+    if len(networks) == 0 {
+        return errors.Wrapf(ErrCNINotInitialized, "no valid networks found in %s", c.pluginDirs)
+    }
+    c.networks = append(c.networks, networks...)
+    return nil
 }
 ```
