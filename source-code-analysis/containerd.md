@@ -157,7 +157,7 @@ import _ "github.com/containerd/containerd/pkg/cri"
 // 其他的包import需要看containerd/cmd/containerd/下面的代码
 ```
 
-### cri service
+### cri server
 根据grpc的服务描述定义，cri service需要实现下面的方法供kubelet调用。\
 这些方法的实现都在```github.com/containerd/containerd/pkg/cri/server```的包下面
 
@@ -209,12 +209,13 @@ service RuntimeService {
     rpc Status(StatusRequest) returns (StatusResponse) {}
 }
 ```
-cri serivce通过实现Status()函数来检查runtime的状态
+cri server通过实现Status()函数来检查runtime的状态
 ```golang
-// Status returns the status of the runtime.
+// containerd/pkg/cri/server/status.go +32
 func (c *criService) Status(ctx context.Context, r *runtime.StatusRequest) (*runtime.StatusResponse, error) {
-    // As a containerd plugin, if CRI plugin is serving request,
-    // containerd must be ready.
+    // runtime的状态检查的返回主要有两部分，
+    // 1. 一个是runtime本身的状态，默认为true，因为如果该grpc调用能正常处理请求，那么containerd肯定是正常的
+    // 2. cni插件的状态
     runtimeCondition := &runtime.RuntimeCondition{
         Type:   runtime.RuntimeReady,
         Status: true,
@@ -223,7 +224,7 @@ func (c *criService) Status(ctx context.Context, r *runtime.StatusRequest) (*run
         Type:   runtime.NetworkReady,
         Status: true,
     }
-    // Check the status of the cni initialization
+    // 检查cni插件的状态
     if err := c.netPlugin.Status(); err != nil {
         networkCondition.Status = false
         networkCondition.Reason = networkNotReadyReason
@@ -242,4 +243,119 @@ func (c *criService) Status(ctx context.Context, r *runtime.StatusRequest) (*run
     return resp, nil
 }
 
+```
+cni插件在cri server初始化的时候跟着初始化
+```golang
+// containerd/pkg/cri/server/server_linux.go +28
+const networkAttachCount = 2
+
+// initPlatform handles linux specific initialization for the CRI service.
+func (c *criService) initPlatform() error {
+    ...
+
+    // 每一个pod最少需要一个loopback网卡跟一个非主机网卡，所以networkAttachCount为2
+    c.netPlugin, err = cni.New(cni.WithMinNetworkCount(networkAttachCount),
+        cni.WithPluginConfDir(c.config.NetworkPluginConfDir),
+        cni.WithPluginMaxConfNum(c.config.NetworkPluginMaxConfNum),
+        cni.WithPluginDir([]string{c.config.NetworkPluginBinDir}))
+    ...
+
+    return nil
+}
+```
+其中```cni.New()```函数返回一个```criService.netPlugin```
+```golang
+// containerd/vendor/github.com/containerd/go-cni/cni.go +80
+func defaultCNIConfig() *libcni {
+    return &libcni{
+        config: config{
+            pluginDirs:       []string{DefaultCNIDir},  // "/opt/cni/bin"
+            pluginConfDir:    DefaultNetDir,            // "/etc/cni/net.d"
+            pluginMaxConfNum: DefaultMaxConfNum,        // 1
+            prefix:           DefaultPrefix,            // "eth"
+        },
+        cniConfig: &cnilibrary.CNIConfig{
+            Path: []string{DefaultCNIDir},              // "/opt/cni/bin"
+        },
+        networkCount: 1,
+    }
+}
+
+// New creates a new libcni instance.
+func New(config ...Opt) (CNI, error) {
+    cni := defaultCNIConfig()
+    var err error
+    for _, c := range config {
+        if err = c(cni); err != nil {
+            return nil, err
+        }
+    }
+    return cni, nil
+}
+
+// 所以Status()函数检查的逻辑很简单，只要c.networks小于2，证明cni插件的初始化就没有完成
+func (c *libcni) Status() error {
+	c.RLock()
+	defer c.RUnlock()
+	if len(c.networks) < c.networkCount {
+		return ErrCNINotInitialized
+	}
+	return nil
+}
+
+```
+其中loopback口的network配置代码里默认加载，其他的配置则在""/etc/cni/net.d/*.(conf|conflist|json}"的配置文件中
+```golang
+// containerd/pkg/cri/server/server_linux.go +75
+func (c *criService) cniLoadOptions() []cni.Opt {
+    return []cni.Opt{cni.WithLoNetwork, cni.WithDefaultConf}
+}
+```
+```cni.WithLoNetwork()```跟```cni.WithDefaultConf()```两个函数如下
+```golang
+
+// containerd/vendor/github.com/containerd/go-cni/opts.go +80
+ func WithLoNetwork(c *libcni) error {
+ 	loConfig, _ := cnilibrary.ConfListFromBytes([]byte(`{
+ "cniVersion": "0.3.1",
+ "name": "cni-loopback",
+ "plugins": [{
+   "type": "loopback"
+ }]
+ }`))
+ 
+ 	c.networks = append(c.networks, &Network{
+ 		cni:    c.cniConfig,
+ 		config: loConfig,
+ 		ifName: "lo",
+ 	})
+ 	return nil
+ }
+
+func WithDefaultConf(c *libcni) error {
+	return loadFromConfDir(c, c.pluginMaxConfNum)
+}
+
+func loadFromConfDir(c *libcni, max int) error {
+	files, err := cnilibrary.ConfFiles(c.pluginConfDir, []string{".conf", ".conflist", ".json"})
+	...
+	var networks []*Network
+	for _, confFile := range files {
+		...
+		networks = append(networks, &Network{
+			cni:    c.cniConfig,
+			config: confList,
+			ifName: getIfName(c.prefix, i),
+		})
+		i++
+		if i == max {
+			break
+		}
+	}
+	if len(networks) == 0 {
+		return errors.Wrapf(ErrCNINotInitialized, "no valid networks found in %s", c.pluginDirs)
+	}
+	c.networks = append(c.networks, networks...)
+	return nil
+}
 ```
