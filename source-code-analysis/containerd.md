@@ -304,7 +304,7 @@ func (c *libcni) Status() error {
 }
 
 ```
-其中loopback口的network配置代码里默认加载，其他的配置则在""/etc/cni/net.d/*.(conf|conflist|json}"的配置文件中
+其中loopback口的network配置代码里默认加载，其他的配置则在"/etc/cni/net.d/*.(conf|conflist|json}"的配置文件中
 ```golang
 // containerd/pkg/cri/server/server_linux.go +75
 func (c *criService) cniLoadOptions() []cni.Opt {
@@ -337,6 +337,7 @@ func WithDefaultConf(c *libcni) error {
 }
 
 func loadFromConfDir(c *libcni, max int) error {
+    // 加载"/etc/cni/net.d/*.(conf|conflist|json}"的配置文件
     files, err := cnilibrary.ConfFiles(c.pluginConfDir, []string{".conf", ".conflist", ".json"})
     ...
     var networks []*Network
