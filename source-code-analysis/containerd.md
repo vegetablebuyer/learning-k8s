@@ -158,30 +158,104 @@ import _ "github.com/containerd/containerd/pkg/cri"
 ```
 
 ### cri service
-```golang
-type RuntimeServiceServer interface {
-    Version(context.Context, *VersionRequest) (*VersionResponse, error)
-    RunPodSandbox(context.Context, *RunPodSandboxRequest) (*RunPodSandboxResponse, error)
-    StopPodSandbox(context.Context, *StopPodSandboxRequest) (*StopPodSandboxResponse, error)
-    RemovePodSandbox(context.Context, *RemovePodSandboxRequest) (*RemovePodSandboxResponse, error)
-    PodSandboxStatus(context.Context, *PodSandboxStatusRequest) (*PodSandboxStatusResponse, error)
-    ListPodSandbox(context.Context, *ListPodSandboxRequest) (*ListPodSandboxResponse, error)
-    CreateContainer(context.Context, *CreateContainerRequest) (*CreateContainerResponse, error)
-    StartContainer(context.Context, *StartContainerRequest) (*StartContainerResponse, error)
-    StopContainer(context.Context, *StopContainerRequest) (*StopContainerResponse, error)
-    RemoveContainer(context.Context, *RemoveContainerRequest) (*RemoveContainerResponse, error)
-    ListContainers(context.Context, *ListContainersRequest) (*ListContainersResponse, error)
-    ContainerStatus(context.Context, *ContainerStatusRequest) (*ContainerStatusResponse, error)
-    UpdateContainerResources(context.Context, *UpdateContainerResourcesRequest) (*UpdateContainerResourcesResponse, error)
-    ReopenContainerLog(context.Context, *ReopenContainerLogRequest) (*ReopenContainerLogResponse, error)
-    ExecSync(context.Context, *ExecSyncRequest) (*ExecSyncResponse, error)
-    Exec(context.Context, *ExecRequest) (*ExecResponse, error)
-    Attach(context.Context, *AttachRequest) (*AttachResponse, error)
-    PortForward(context.Context, *PortForwardRequest) (*PortForwardResponse, error)
-    ContainerStats(context.Context, *ContainerStatsRequest) (*ContainerStatsResponse, error)
-    ListContainerStats(context.Context, *ListContainerStatsRequest) (*ListContainerStatsResponse, error)
-    UpdateRuntimeConfig(context.Context, *UpdateRuntimeConfigRequest) (*UpdateRuntimeConfigResponse, error)
-    Status(context.Context, *StatusRequest) (*StatusResponse, error)
+
+
+
+```protobuf
+service RuntimeService {
+    // Version returns the runtime name, runtime version, and runtime API version.
+    rpc Version(VersionRequest) returns (VersionResponse) {}
+
+    // RunPodSandbox creates and starts a pod-level sandbox. Runtimes must ensure
+    // the sandbox is in the ready state on success.
+    rpc RunPodSandbox(RunPodSandboxRequest) returns (RunPodSandboxResponse) {}
+    // StopPodSandbox stops any running process that is part of the sandbox and
+    // reclaims network resources (e.g., IP addresses) allocated to the sandbox.
+    // If there are any running containers in the sandbox, they must be forcibly
+    // terminated.
+    // This call is idempotent, and must not return an error if all relevant
+    // resources have already been reclaimed. kubelet will call StopPodSandbox
+    // at least once before calling RemovePodSandbox. It will also attempt to
+    // reclaim resources eagerly, as soon as a sandbox is not needed. Hence,
+    // multiple StopPodSandbox calls are expected.
+    rpc StopPodSandbox(StopPodSandboxRequest) returns (StopPodSandboxResponse) {}
+    // RemovePodSandbox removes the sandbox. If there are any running containers
+    // in the sandbox, they must be forcibly terminated and removed.
+    // This call is idempotent, and must not return an error if the sandbox has
+    // already been removed.
+    rpc RemovePodSandbox(RemovePodSandboxRequest) returns (RemovePodSandboxResponse) {}
+    // PodSandboxStatus returns the status of the PodSandbox. If the PodSandbox is not
+    // present, returns an error.
+    rpc PodSandboxStatus(PodSandboxStatusRequest) returns (PodSandboxStatusResponse) {}
+    // ListPodSandbox returns a list of PodSandboxes.
+    rpc ListPodSandbox(ListPodSandboxRequest) returns (ListPodSandboxResponse) {}
+
+    // CreateContainer creates a new container in specified PodSandbox
+    rpc CreateContainer(CreateContainerRequest) returns (CreateContainerResponse) {}
+    // StartContainer starts the container.
+    rpc StartContainer(StartContainerRequest) returns (StartContainerResponse) {}
+    // StopContainer stops a running container with a grace period (i.e., timeout).
+    // This call is idempotent, and must not return an error if the container has
+    // already been stopped.
+    // TODO: what must the runtime do after the grace period is reached?
+    rpc StopContainer(StopContainerRequest) returns (StopContainerResponse) {}
+    // RemoveContainer removes the container. If the container is running, the
+    // container must be forcibly removed.
+    // This call is idempotent, and must not return an error if the container has
+    // already been removed.
+    rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse) {}
+    // ListContainers lists all containers by filters.
+    rpc ListContainers(ListContainersRequest) returns (ListContainersResponse) {}
+    // ContainerStatus returns status of the container. If the container is not
+    // present, returns an error.
+    rpc ContainerStatus(ContainerStatusRequest) returns (ContainerStatusResponse) {}
+    // UpdateContainerResources updates ContainerConfig of the container.
+    rpc UpdateContainerResources(UpdateContainerResourcesRequest) returns (UpdateContainerResourcesResponse) {}
+    // ReopenContainerLog asks runtime to reopen the stdout/stderr log file
+    // for the container. This is often called after the log file has been
+    // rotated. If the container is not running, container runtime can choose
+    // to either create a new log file and return nil, or return an error.
+    // Once it returns error, new container log file MUST NOT be created.
+    rpc ReopenContainerLog(ReopenContainerLogRequest) returns (ReopenContainerLogResponse) {}
+
+    // ExecSync runs a command in a container synchronously.
+    rpc ExecSync(ExecSyncRequest) returns (ExecSyncResponse) {}
+    // Exec prepares a streaming endpoint to execute a command in the container.
+    rpc Exec(ExecRequest) returns (ExecResponse) {}
+    // Attach prepares a streaming endpoint to attach to a running container.
+    rpc Attach(AttachRequest) returns (AttachResponse) {}
+    // PortForward prepares a streaming endpoint to forward ports from a PodSandbox.
+    rpc PortForward(PortForwardRequest) returns (PortForwardResponse) {}
+
+    // ContainerStats returns stats of the container. If the container does not
+    // exist, the call returns an error.
+    rpc ContainerStats(ContainerStatsRequest) returns (ContainerStatsResponse) {}
+    // ListContainerStats returns stats of all running containers.
+    rpc ListContainerStats(ListContainerStatsRequest) returns (ListContainerStatsResponse) {}
+
+    // UpdateRuntimeConfig updates the runtime configuration based on the given request.
+    rpc UpdateRuntimeConfig(UpdateRuntimeConfigRequest) returns (UpdateRuntimeConfigResponse) {}
+
+    // Status returns the status of the runtime.
+    rpc Status(StatusRequest) returns (StatusResponse) {}
+}
+
+// ImageService defines the public APIs for managing images.
+service ImageService {
+    // ListImages lists existing images.
+    rpc ListImages(ListImagesRequest) returns (ListImagesResponse) {}
+    // ImageStatus returns the status of the image. If the image is not
+    // present, returns a response with ImageStatusResponse.Image set to
+    // nil.
+    rpc ImageStatus(ImageStatusRequest) returns (ImageStatusResponse) {}
+    // PullImage pulls an image with authentication config.
+    rpc PullImage(PullImageRequest) returns (PullImageResponse) {}
+    // RemoveImage removes the image.
+    // This call is idempotent, and must not return an error if the image has
+    // already been removed.
+    rpc RemoveImage(RemoveImageRequest) returns (RemoveImageResponse) {}
+    // ImageFSInfo returns information of the filesystem that is used to store images.
+    rpc ImageFsInfo(ImageFsInfoRequest) returns (ImageFsInfoResponse) {}
 }
 
 ```
