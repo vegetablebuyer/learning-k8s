@@ -230,7 +230,9 @@ root@hostname:/# echo ${Payload}
 
 ### bootstrap tokens认证
 > 要启用bootstrap tokens需要在apiserver打开下面参数
-> ```shell script --enable-bootstrap-token-auth=true```
+> ```shell script 
+> --enable-bootstrap-token-auth=true
+> ```
 
 bootstrap tokens是一种简单的持有者令牌（Bearer Token），这种令牌是在新建集群，或者在现有集群中添加新节点时使用的。
 ```shell script
