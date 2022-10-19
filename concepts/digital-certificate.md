@@ -138,6 +138,7 @@ root@hostname:/etc/kubernetes/pki# tree
 
 
 ### jwt token的解码
+k8s给每一个service account分配的secret中token就属于jwt token
 ```shell script
 #!/bin/bash
 
@@ -222,10 +223,25 @@ root@hostname:/# echo ${Payload}
 3. value3 = hash(value1 + "." + value2)
 4. Signature = 私钥加密(value3) 
 > 这里的私钥是在 controller-manager指定的参数 --service-account-private-key-file=/etc/kubernetes/pki/sa.key
-5. token = base64(base64Encode(${Header}) + "." + base64Encode(${Payload}) + "." + base64Encode(${Signature}))
+5. token = base64Encode(base64Encode(${Header}) + "." + base64Encode(${Payload}) + "." + base64Encode(${Signature}))
 
 #### k8s中jwt token的验证过程
 生成jwt token步骤的逆过程，其中Signature用公钥解密
+
+### bootstrap tokens认证
+> 要启用bootstrap tokens需要在apiserver打开下面参数
+> ```shell script --enable-bootstrap-token-auth=true```
+
+bootstrap tokens是一种简单的持有者令牌（Bearer Token），这种令牌是在新建集群，或者在现有集群中添加新节点时使用的。
+```shell script
+root@hostname:/# kubeadm token list
+TOKEN                     TTL         EXPIRES   USAGES                   DESCRIPTION   EXTRA GROUPS
+112233.445566778899aabb   <forever>   <never>   authentication,signing   <none>        system:bootstrappers:kubeadm:default-node-token
+shopee.kubernetes666666   <forever>   <never>   authentication,signing   <none>        system:bootstrappers:kubeadm:default-node-token
+```
+### token的格式
+token使用```abcdef.0123456789abcdef```的格式。以```.```为分隔符，第一部分为```{token id}```，是一种公开信息，用于引用令牌并确保不会泄露认证所使用的秘密信息；第二部分为```{token secret}```，应该被共享给受信的第三方。
+
 
 ### kubeconfig认证
 kubeconfig文件的内容
