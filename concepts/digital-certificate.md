@@ -1,4 +1,5 @@
-## 数字证书
+## k8s的认证系统
+### 数字证书
 
 - 对称加密：加密跟解密都使用同一个密钥，
     - 优点：加解密的效率高
@@ -8,12 +9,12 @@
     - 缺点：加解密的效率比较低
 http协议为明文传输，有极高的数据泄露的风险。于是https应运而生，https其实就是http+tls。其中tls采用的是非对称加密
 
-### 1. 数字证书的内容：
+#### 1. 数字证书的内容：
 1. 证书持有者的公钥
 2. 证书的持有者、用途、颁发机构、有效时间等信息
 3. Certificate Signature = CA私钥加密(Hash(1 + 2))
 
-### 2. 客户端验证数字证书有效性的过程：
+#### 2. 客户端验证数字证书有效性的过程：
 1. CA公钥解密(1.3 Certificate Signature) = Hash1
 2. Hash(数字证书内容(1.1 + 1.2)) = Hash2
 3. 对比Hash1跟Hash2，一致就认为数字证书有效，不一致就认为证书无效
@@ -45,7 +46,7 @@ https双向认证的过程：
 9. 服务端用自己的私钥去解密这个密文，得到了密钥 R
 10. 服务端和客户端在后续通讯过程中就使用这个密钥R进行通信了。
 
-### 查看数字证书的内容
+#### 查看数字证书的内容
 ```shell script
 root@hostname:/path/# openssl x509 -in apiserver.crt -text -noout
 Certificate:
@@ -106,7 +107,7 @@ Certificate:
          6b:96:7c:f8
 ```
 
-## kubernetes的证书
+### kubernetes系统用到的证书
 k8s中的https访问都是双向认证，客户端需要认证服务的证书，反之服务端也需要认证客户端的证书。
 ```shell script
 root@hostname:/etc/kubernetes/pki# tree
@@ -241,7 +242,7 @@ TOKEN                     TTL         EXPIRES   USAGES                   DESCRIP
 112233.445566778899aabb   <forever>   <never>   authentication,signing   <none>        system:bootstrappers:kubeadm:default-node-token
 shopee.kubernetes666666   <forever>   <never>   authentication,signing   <none>        system:bootstrappers:kubeadm:default-node-token
 ```
-### token的格式
+#### token的格式
 token使用```abcdef.0123456789abcdef```的格式。以```.```为分隔符，第一部分为```{token-id}```，是一种公开信息，用于引用令牌并确保不会泄露认证所使用的秘密信息；第二部分为```{token-secret}```，应该被共享给受信的第三方。
 ```shell script
 # 获取token-secret的明文
@@ -253,7 +254,7 @@ kubectl get clusterrolebinding kubeadm:kubelet-bootstrap -o yaml
 ```
 
 ### kubeconfig认证
-kubeconfig文件的内容
+kubeconfig认证本质上也是证书认证，先看下kubeconfig文件的内容
 ```shell script
 apiVersion: v1
 clusters:  # k8s集群的信息，可以配置多个集群
