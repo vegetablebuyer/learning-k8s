@@ -247,7 +247,7 @@ token使用```abcdef.0123456789abcdef```的格式。以```.```为分隔符，第
 # 获取token-secret的明文
 kubectl get secret -n kube-system bootstrap-token-${token-id} -o jsonpath='{.data.token-secret}' | base64 -d 
 # 获取该token所属的Group
-binding=`kubectl get secret -n kube-system bootstrap-token-${token-id} -o jsonpath='{.data.auth-extra-groups}' | base64 -d`
+kubectl get secret -n kube-system bootstrap-token-${token-id} -o jsonpath='{.data.auth-extra-groups}' | base64 -d
 # 获取这个token绑定的clusterrole
 kubectl get clusterrolebinding kubeadm:kubelet-bootstrap -o yaml
 ```
