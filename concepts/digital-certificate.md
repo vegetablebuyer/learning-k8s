@@ -138,8 +138,9 @@ root@hostname:/etc/kubernetes/pki# tree
 ```
 
 
-### jwt token的解码
-k8s给每一个service account分配的secret中token就属于jwt token
+### jwt token认证
+k8s给每一个service account分配的secret中token就属于jwt token \
+jwt token的解码
 ```shell script
 #!/bin/bash
 
