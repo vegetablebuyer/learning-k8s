@@ -1,5 +1,11 @@
 ## Prometheus
 
+### 谷歌SRE监控的4个黄金指标
+- 延迟：服务请求所需时间
+- 通讯量：监控当前系统的流量，用于衡量服务的容量需求
+- 错误：监控当前系统所有发生的错误请求，衡量当前系统错误发生的速率
+- 饱和度：衡量当前服务的饱和度
+
 ### 指标类型
 
 - ```Counter```: 单调递增的计数器，重启的时候重置为0
@@ -55,11 +61,12 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | apiserver_request_no_resourceversion_list_total | Counter   | 对APIServer的请求参数中未配置ResourceVersion的LIST请求的计数。请求的维度包括Group、Version、Resource、Scope和Client。用来评估quorum read类型LIST请求的情况，用于发现是否存在过多quorum read类型LIST以及相应的客户端，以便优化客户端请求行为。                                                                                                                                                  |
 | apiserver_current_inflight_requests             | Gauge     | APIServer当前处理的请求数。包括ReadOnly和Mutating两种。                                                                                                                                                                                                                                                                                                                                        |
 | apiserver_dropped_requests_total                | Counter   | 限流丢弃掉的请求数。HTTP返回值是429 'Try again later'。                                                                                                                                                                                                                                                                                                                                        |
-### 监控的指标
-1. 
-```
-// apiserver单个实例的qps
-sum(rate(apiserver_request_total[15s])) by (instance) > 0
-// apiserver请求的P99延迟，秒为单位
-histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT|PATCH|POST|PUT|LIST", subresource!="exec"}[15s])) by(le))
-```                                                                                                                                                                                                                                                                                                                                                                                            |
+### 监控的关键指标
+| 名称             	| promql                                                                                                                                                                           	| 说明                            	|
+|------------------	|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|---------------------------------	|
+| API QPS          	| sum(irate(apiserver_request_total[$interval]))                                                                                                                                   	| APIServer总QPS。                	|
+| 读请求成功率     	| sum(irate(apiserver_request_total{code=~"20.*",verb=~"GET\|LIST"}[$interval]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[$interval]))                                 	| APIServer读请求成功率。         	|
+| 写请求成功率     	| sum(irate(apiserver_request_total{code=~"20.*",verb!~"GET\|LIST\|WATCH\|CONNECT"}[$interval]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[$interval])) 	| APIServer写请求成功率。         	|
+| 在处理读请求数量 	| sum(apiserver_current_inflight_requests{requestKind="readOnly"})                                                                                                                 	| APIServer当前在处理读请求数量。 	|
+| 在处理写请求数量 	| sum(apiserver_current_inflight_requests{requestKind="mutating"})                                                                                                                 	| APIServer当前在处理写请求数量。 	|
+| 请求限流速率     	| sum(irate(apiserver_dropped_requests_total[$interval]))                                                                                                                          	| Dropped Request Rate。          	|
