@@ -65,8 +65,8 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | promql                                                                                                                                                                           | 说明                            |
 |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
 | sum(irate(apiserver_request_total[15s]))                                                                                                                                   | APIServer总QPS。                |
-| sum(irate(apiserver_request_total{code=\~"20.*", verb=~"GET\|LIST"}[15s]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[15s]))                                 | APIServer读请求成功率。         |
-| sum(irate(apiserver_request_total{code=\~"20.*", verb!~"GET\|LIST\|WATCH\|CONNECT"}[15s]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[15s])) | APIServer写请求成功率。         |
+| sum(irate(apiserver_request_total{code=\~"20.*", verb=\~"GET\|LIST"}[15s]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[15s]))                                 | APIServer读请求成功率。         |
+| sum(irate(apiserver_request_total{code=\~"20.*", verb!\~"GET\|LIST\|WATCH\|CONNECT"}[15s]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[15s])) | APIServer写请求成功率。         |
 | sum(apiserver_current_inflight_requests{requestKind="readOnly"})                                                                                                                 | APIServer当前在处理读请求数量。 |
 | sum(apiserver_current_inflight_requests{requestKind="mutating"})                                                                                                                 | APIServer当前在处理写请求数量。 |
 | sum(irate(apiserver_dropped_requests_total[15s]))                                                                                                                          | Dropped Request Rate。          |
