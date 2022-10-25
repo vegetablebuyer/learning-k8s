@@ -1,9 +1,16 @@
-## Prometheus指标类型
+## Prometheus
+
+### 指标类型
 
 - ```Counter```: 单调递增的计数器，重启的时候重置为0
 - ```Gauge```: 一个可增可减的数字变量，初始值为0
 - ```Histogram```: 会对观测数据取样，然后将观测数据放入有数值上界的桶中，并记录各桶中数据的个数，所有数据的个数和数据数值总和
 - ```Summary```: 与```Histogram```类似，除此之外还会取一个滑动窗口，计算窗口内样本数据的分位数
+
+### 函数
+- ```rate(promql[tw])```: 计算在tw的采样周期内每秒的增长率，promql需要是一个```Counter```类型
+- ```irate(promql[tw])```: 计算在tw的采样周期内瞬时增长率，只使用采样周期内的最后两个样本，promql需要是一个```Counter```类型
+- ```increase(promql[tw])```: 计算在tw的采样周期内的增长量，```increase(promql[15s]) / 15```等同于```rate(promql[15s])```
 
 ## Apiserver
 Apiserver的指标有下面的label
@@ -43,13 +50,21 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 ```
 - ```apiserver_request_total```: apiserver的请求总数，是一个```Counter```指标，有下面label \
     ```code```，```component```，```contentType```，```dry_run```，```group```，```resource```，```scope```，```subresource```，```verb```，```version```
-- ```apiserver_request_duration_seconds_bucket```: apiserver的请求延迟，是一个```Histogram```指标，有下面label \
+- ```apiserver_request_duration_seconds_bucket```: apiserver的请求延迟，单位为秒（s），是一个```Histogram```指标，该指标超过60s的请求都统计为60s。有下面label \
     ```le```，```component```，```contentType```，```dry_run```，```group```，```resource```，```scope```，```subresource```，```verb```，```version```
 - ```apiserver_current_inflight_requests```: apiserver当前正在并发处理的请求，是一个```Gauge```指标，有下面label \
     ```requestKind```，取值为```readOnly(只读请求)```、```mutating(写请求)```
 - ```apiserver_current_inqueue_requests```: apiserver当前正在排队的请求，是一个```Gauge```指标，需要开启APF才有
 ### 监控的指标
 1. 
-```promql
-sum(rate(apiserver_request_total[15s])) by (instance) > 0
 ```
+// apiserver单个实例的qps
+sum(rate(apiserver_request_total[15s])) by (instance) > 0
+// apiserver请求的P99延迟，秒为单位
+histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket{verb!~"WATCH|CONNECT|PATCH|POST|PUT|LIST", subresource!="exec"}[15s])) by(le))
+```
+| 指标                                      	| 指标类型  	| 指标说明                                                                                                                                                                                                                                                                                                                                                                                       	|
+|-------------------------------------------	|-----------	|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
+| apiserver_request_duration_seconds_bucket 	| Histogram 	| 该指标用于统计APIServer客户端对APIServer的访问时延。对APIServer不同请求的时延分布。请求的维度包括Verb、Group、Version、Resource、Subresource、Scope、Component和Client。 Histogram Bucket的阈值为： {0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60}，单位：秒。 	|
+| apiserver_request_total                   	| Counter   	| 对APIServer不同请求的计数。请求的维度包括Verb、Group、Version、Resource、Scope、Component、HTTP contentType、HTTP code和Client                                                                                                                                                                                                                                                                 	|
+|                                           	|           	|                                                                                                                                                                                                                                                                                                                                                                                                	|                             |           |                                                                                                                                                                                                                                                                                                                                                                                                |
