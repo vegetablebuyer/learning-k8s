@@ -63,7 +63,7 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | apiserver_dropped_requests_total                | Counter   | 限流丢弃掉的请求数。HTTP返回值是429 'Try again later'。                                                                                                                                                                                                                                                                                                                                        |
 ### 监控的关键指标
 | promql                                                                                                                                                                           | 说明                            |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
+|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
 | sum(irate(apiserver_request_total[15s]))                                                                                                                                   | APIServer总QPS。                |
 | sum(irate(apiserver_request_total{code=\~"20.*",verb=\~"GET\|LIST"}[15s]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[15s]))                                 | APIServer读请求成功率。         |
 | sum(irate(apiserver_request_total{code=\~"20.*",verb!\~"GET\|LIST\|WATCH\|CONNECT"}[15s]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[15s])) | APIServer写请求成功率。         |
