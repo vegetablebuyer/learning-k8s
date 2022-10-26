@@ -73,3 +73,12 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb="LIST"}[$interval])) by (verb, resource, scope, le))                                           | ApiServer LIST读请求时延        |
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb!~"GET\|WATCH\|LIST\|CONNECT"}[$interval])) by (verb, resource, scope, le))                     | 写请求时延                      |
 > 延时跟QPS的指标需要根据情况进行多个维度的监控
+
+## Scheduler
+| 指标                                        | 指标类型  | 指标说明                                                                                                                                 |
+|:---------------------------------------------|:-----------|:------------------------------------------------------------------------------------------------------------------------------------------|
+| scheduler_scheduler_cache_size              | Gauge     | 调度器缓存中Node、Pod和AssumedPod的数量。                                                                                                |
+| scheduler_pending_pods                      | Gauge     | Pending Pod的数量。队列种类如下： unschedulable：表示不可调度的Pod数量。 backoff：表示backoffQ的Pod数量。 active：表示activeQ的Pod数量。 |
+| scheduler_pod_scheduling_attempts_bucket    | Histogram | 调度器成功调度Pod所尝试的次数                                                                                                            |
+| rest_client_requests_total                  | Counter   | scheduler对ApiServer的请求数                                                                                                             |
+| rest_client_request_duration_seconds_bucket | Histogram | scheduler对ApiServer的请求延迟                                                                                                           |
