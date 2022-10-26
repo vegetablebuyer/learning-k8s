@@ -72,3 +72,4 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb="GET"}[$interval])) by (verb, resource, subresource, scope, le))                               | ApiServer GET请求的P99延迟      |
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb="LIST"}[$interval])) by (verb, resource, scope, le))                                           | ApiServer LIST读请求时延        |
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb!~"GET\|WATCH\|LIST\|CONNECT"}[$interval])) by (verb, resource, scope, le))                     | 写请求时延                      |
+> 延时跟QPS的指标需要根据情况进行多个维度的监控
