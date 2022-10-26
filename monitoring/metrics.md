@@ -65,8 +65,8 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 | promql                                                                                                                                                                           | 说明                            |
 |:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------|
 | sum(irate(apiserver_request_total[$interval]))                                                                                                                                   | ApiServer总QPS                  |
-| sum(irate(apiserver_request_total{code=~"20.*",verb=~"GET\|LIST"}[$interval]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[$interval]))                                 | ApiServer读请求成功率。         |
-| sum(irate(apiserver_request_total{code=~"20.*",verb!~"GET\|LIST\|WATCH\|CONNECT"}[$interval]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[$interval])) | ApiServer写请求成功率。         |
+| sum(irate(apiserver_request_total{code=\~"20.*",verb=\~"GET\|LIST"}[$interval]))/sum(irate(apiserver_request_total{verb=~"GET\|LIST"}[$interval]))                                 | ApiServer读请求成功率。         |
+| sum(irate(apiserver_request_total{code=\~"20.*",verb!\~"GET\|LIST\|WATCH\|CONNECT"}[$interval]))/sum(irate(apiserver_request_total{verb!~"GET\|LIST\|WATCH\|CONNECT"}[$interval])) | ApiServer写请求成功率。         |
 | sum(apiserver_current_inflight_requests{requestKind="readOnly"})                                                                                                                 | ApiServer当前在处理读请求数量。 |
 | sum(apiserver_current_inflight_requests{requestKind="mutating"})                                                                                                                 | ApiServer当前在处理写请求数量。 |
 | histogram_quantile(0.99, sum(irate(apiserver_request_duration_seconds_bucket{verb="GET"}[$interval])) by (verb, resource, subresource, scope, le))                               | ApiServer GET请求的P99延迟      |
