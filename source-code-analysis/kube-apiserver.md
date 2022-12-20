@@ -86,7 +86,7 @@ AggregatorServer，APIServer，APIExtensionServer三个服务都创建了一个h
 ```golang
 // kubernetes/vendor/k8s.io/apiserver/pkg/server/config.go +538
 func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*GenericAPIServer, error) {
-	...
+    ...
     handlerChainBuilder := func(handler http.Handler) http.Handler {
         return c.BuildHandlerChainFunc(handler, c.Config)
     }
@@ -136,7 +136,7 @@ ServeHTTP()方法是真正处理请求的逻辑
 ```golang
 // kubernetes/vendor/k8s.io/apiserver/pkg/server/handler.go +187
 func (a *APIServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.FullHandlerChain.ServeHTTP(w, r)
+    a.FullHandlerChain.ServeHTTP(w, r)
 }
 ```
 FullHandlerChain是被handlerChainBuilder修饰的director，所以正常处理请求是director.ServeHTTP() \
@@ -146,28 +146,28 @@ FullHandlerChain是被handlerChainBuilder修饰的director，所以正常处理�
 ```golang
 // kubernetes/vendor/k8s.io/apiserver/pkg/server/handler.go +122
 func (d director) ServeHTTP(w http.ResponseWriter, req *http.Request) {
- 	path := req.URL.Path
+    path := req.URL.Path
  
- 	// check to see if our webservices want to claim this path
- 	for _, ws := range d.goRestfulContainer.RegisteredWebServices() {
- 		switch {
- 		case ws.RootPath() == "/apis":
- 			if path == "/apis" || path == "/apis/" {
- 				d.goRestfulContainer.Dispatch(w, req)
- 				return
- 			}
+    // check to see if our webservices want to claim this path
+    for _, ws := range d.goRestfulContainer.RegisteredWebServices() {
+        switch {
+        case ws.RootPath() == "/apis":
+            if path == "/apis" || path == "/apis/" {
+                d.goRestfulContainer.Dispatch(w, req)
+                return
+            }
  
- 		case strings.HasPrefix(path, ws.RootPath()):
- 			// ensure an exact match or a path boundary match
- 			if len(path) == len(ws.RootPath()) || path[len(ws.RootPath())] == '/' {
- 				d.goRestfulContainer.Dispatch(w, req)
- 				return
- 			}
- 		}
- 	}
+        case strings.HasPrefix(path, ws.RootPath()):
+            // ensure an exact match or a path boundary match
+            if len(path) == len(ws.RootPath()) || path[len(ws.RootPath())] == '/' {
+                d.goRestfulContainer.Dispatch(w, req)
+                return
+            }
+        }
+    }
  
- 	// if we didn't find a match, then we just skip gorestful altogether
- 	klog.V(5).Infof("%v: %v %q satisfied by nonGoRestful", d.name, req.Method, path)
- 	d.nonGoRestfulMux.ServeHTTP(w, req)
+    // if we didn't find a match, then we just skip gorestful altogether
+    klog.V(5).Infof("%v: %v %q satisfied by nonGoRestful", d.name, req.Method, path)
+    d.nonGoRestfulMux.ServeHTTP(w, req)
  }
 ```
