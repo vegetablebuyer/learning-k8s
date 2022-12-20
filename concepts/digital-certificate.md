@@ -236,6 +236,10 @@ root@hostname:/# echo ${Payload}
 > --enable-bootstrap-token-auth=true
 > ```
 
+### 用token访问apiserver
+token=`kubectl get secret -n ${namespace} ${name} -o jsonpath={".data.token"} | base64 -d`
+curk -k -H "Authorization: Bearer $token" https://${apiserver_ip}:6443
+
 bootstrap tokens是一种简单的持有者令牌（Bearer Token），这种令牌是在新建集群，或者在现有集群中添加新节点时使用的。
 ```shell script
 root@hostname:/# kubeadm token list
