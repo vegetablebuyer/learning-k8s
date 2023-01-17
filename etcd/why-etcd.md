@@ -1,0 +1,121 @@
+### etcd的典型问题
+- 原理
+    - 为什么etcd适合读多写少？线性读跟串行读各自适合什么业务场景，分别是如何实现？
+    - 如何判断etcd是否适合你的业务场景？
+    - 为什么follower的raft日志可能会与leader冲突？冲突时follower的wal日志如何删除已持久化但冲突的日志条目？
+    - etcd的watch机制能保证事件不丢失吗？
+    - 不小心删除一个key之后，可以马上找回来吗？
+- 稳定性以及性能
+    - 哪些因素会导致leader发生切换？
+    - 为什么etcd社区的压测结果显示qps可以达到10w每秒，在你的业务集群qps过百就出现超时错误了？
+    - etcd能跨地域部署吗？
+    - 如何优化、提升etcd的性能跟稳定性？
+- 一致性/延迟/内存
+    - 为什么基于raft还有可能出现etcd成员之间的数据不一致？
+    - 为什么集群各节点I/O延迟很低，写请求也会超时呢？
+    - 为什么只存储了1个几百KB的key/value，etcd进程却可能消耗数G的内存？
+    - 如何分析etcd内存和延迟异常背后的原因？
+- db大小
+    - 为什么删了大量的数据，db大小不减少？
+    - 为什么etcd社区建议的db大小不要超过8G？
+    - 哪些因素会导致db大小增加？
+- kubernetes
+    - kubernetes创建pod背后etcd是如何工作的？
+    - etcd如何为kubernetes控制器编程模型提供支撑？
+    - Apiserver的"too old resource version"错误跟etcd有什么关系？
+- 最佳实践
+    - 在一个namespace下创建了数万个pod/CRD资源是，同时频繁通过标签去查询指定的pod/CRD资源时，Apiserver跟etcd为什么扛不住？
+    - 快速增长的业务应如何避免单etcd集群出现的性能瓶颈？
+    - 如何构建安全、高可靠的etcd集群运维体系？
+
+### etcd基础
+- 基础架构
+    - etcd架构演进
+        - etcd v2
+        - etcd v3
+    - 读原理
+    - 写原理
+- raft原理
+    - leader选举
+    - 日志复制
+    - 安全性
+- 鉴权体系
+    - 密码鉴权
+    - 证书鉴权
+    - Token Provider
+        - simple token
+        - JWT
+    - RBAC
+- 租约特性
+    - key如何关联lease
+    - 续期性能
+    - 高效淘汰
+    - checkpoint机制
+- MVCC机制
+    - keyIndex
+    - treeIndex
+    - backend/boltdb
+    - range/update/delete原理
+- Watch机制
+    - 轮询vs流式推送
+    - 历史版本存储
+    - 如何保障推送事件的可靠性
+    - 高效的事件匹配
+- 事务
+    - Txn API
+    - ACID特性在etcd中的实现
+- boltdb
+    - 核心API
+    - db物理结构
+    - db逻辑结构
+    - 事务提交原理
+- 压缩
+    - 周期
+    - 版本号  
+
+### etcd实践
+- 一致性
+    - 不一致表现以及分析方法
+    - 不一致的根本原因
+    - 不一致相关bug
+    - 最佳实践
+- db大小
+    - 启动耗时
+    - 节点内存
+    - 索引性能
+    - boltdb性能
+    - expensive request
+    - 快照
+- 内存
+    - raft log
+    - index tree
+    - boltdb size
+    - watcher
+    - goroutine
+    - expensive request
+    - etcd v2
+    - etcd bug
+- QPS/延时
+    - 负载均衡
+    - 网络、磁盘IO延时
+    - 鉴权机制
+    - 读模式
+    - expensive request
+    - MVCC锁
+    - 集群容量是否出现瓶颈
+    - 节点CPU/Memory配置
+    - 扩展etcd性能
+- 故障诊断
+    - Metrics
+    - Trace日志
+    - etcd常规日志
+    - etcd-dump-logs/WAL
+    - etcd-dump-db/boltdb
+    - auger/Kubernetes
+    - pprof
+- 实战及应用
+    - 构建一个支持多存储引擎的分布式KV数据库
+    - Kubernetes
+    - 分布式锁
+    - 配置服务、服务发现
+    - 如何构建高可靠的etcd运维体系

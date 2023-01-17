@@ -73,7 +73,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
     ...
 }
 ```
-其中三者的delagation关系AggregatorServer -> APIServer -> APIExtensionServer。
+其中三者的delagation关系: AggregatorServer -> APIServer -> APIExtensionServer。
 
 ### http.Handler
 http.Handler为处理http restful请求的实例，处理请求的时候调用的是实例的ServeHTTP()方法
@@ -90,6 +90,7 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
     handlerChainBuilder := func(handler http.Handler) http.Handler {
         return c.BuildHandlerChainFunc(handler, c.Config)
     }
+    // notFoundHandler即为delegationTarget
     apiServerHandler := NewAPIServerHandler(name, c.Serializer, handlerChainBuilder, delegationTarget.UnprotectedHandler())
 
     s := &GenericAPIServer{
@@ -132,7 +133,7 @@ func NewAPIServerHandler(name string, s runtime.NegotiatedSerializer, handlerCha
     }
 }
 ```
-ServeHTTP()方法是真正处理请求的逻辑
+APIServerHandler的ServeHTTP()方法是真正处理请求的逻辑
 ```golang
 // kubernetes/vendor/k8s.io/apiserver/pkg/server/handler.go +187
 func (a *APIServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -171,3 +172,47 @@ func (d director) ServeHTTP(w http.ResponseWriter, req *http.Request) {
     d.nonGoRestfulMux.ServeHTTP(w, req)
  }
 ```
+其中d.nonGoRestfulMux.ServeHTTP(w, req)的逻辑如下
+```golang
+// ServeHTTP makes it an http.Handler
+func (m *PathRecorderMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    m.mux.Load().(*pathHandler).ServeHTTP(w, r)
+}
+
+// ServeHTTP makes it an http.Handler
+func (h *pathHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    if exactHandler, ok := h.pathToHandler[r.URL.Path]; ok {
+        klog.V(5).Infof("%v: %q satisfied by exact match", h.muxName, r.URL.Path)
+        exactHandler.ServeHTTP(w, r)
+        return
+    }
+
+    for _, prefixHandler := range h.prefixHandlers {
+        if strings.HasPrefix(r.URL.Path, prefixHandler.prefix) {
+            klog.V(5).Infof("%v: %q satisfied by prefix %v", h.muxName, r.URL.Path, prefixHandler.prefix)
+            prefixHandler.handler.ServeHTTP(w, r)
+            return
+        }
+    }
+
+    klog.V(5).Infof("%v: %q satisfied by NotFoundHandler", h.muxName, r.URL.Path)
+    h.notFoundHandler.ServeHTTP(w, r)
+}
+```
+由此可见APIServerHandler只会处理请求匹配到自己路径的请求，其余的请求交给notFoundHandler处理。\
+而根据APIServerHandler的构造函数又可知，notFoundHandler为delegationTarget.UnprotectedHandler()
+```golang
+func (s *GenericAPIServer) UnprotectedHandler() http.Handler {	
+    // when we delegate, we need the server we're delegating to choose whether or not to use gorestful  
+    return s.Handler.Director
+}
+```
+而根据delagation关系，AggregatorServer -> APIServer -> APIExtensionServer。我们可以得知 \
+- AggregatorServer.notFoundHandler -> APIServer
+- APIServer.notFoundHandler -> APIExtensionServer
+整个kube-apiserver处理http请求的流程是：
+1. AggregatorServer.APIServerHandler.FullHandlerChain
+2. AggregatorServer.APIServerHandler.Director
+3. AggregatorServer.APIServerHandler.NonGoRestfulMux.notFoundHandler -> APIServer.APIServerHandler.Director
+4. APIServer.APIServerHandler.NonGoRestfulMux.notFoundHandler -> APIExtensionServer.APIServerHandler.Director
+5. APIExtensionServer.APIServerHandler.NonGoRestfulMux.notFoundHandler
