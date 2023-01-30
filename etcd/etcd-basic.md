@@ -19,48 +19,8 @@ etcd的基础架构图如下
 >
 > 因此，基于 HTTP/2 的 gRPC 协议具有低延迟、高性能的特点，有效解决了我们在上一讲中提到的 etcd v2 中 HTTP/1.x 性能问题。
 
-## etcd读请求的执行流程
-![alt text](../pictures/etcd-read-request.png)
-以一次get请求为例子
-```shell script
-# ETCDCTL_API=3 ./etcdctl get hello --endpoints=http://127.0.0.1:2379
-hello 
-world
-```
-"endpoints"是我们后端的etcd地址，通常生产环境下中需要配置多个endpoints，这样在etcd节点出现故障后，client就可以自动重连到其它正常的节点，从而保证请求的正常执行。
 
-
-在 etcd v3.4.9版本中，etcdctl是通过 clientv3库来访问 etcd server，clientv3 库基于gRPC client API封装了操作 etcd KVServer、Cluster、Auth、Lease、Watch等模块的API，同时还包含了负载均衡、健康探测和故障切换等特性。
-
-在解析完请求中的参数后，etcdctl 会创建一个 clientv3 库对象，使用 KVServer 模块的 API 来访问 etcd server。
-
-关于clientv3的负载均衡算法，有两点需要注意
-1. 如果client版本<=3.3，那么当你配置多个endpoint时，负载均衡算法仅会从中选择一个IP并创建一个连接（Pinned endpoint），这样可以节省服务器总连接数。但在heavy usage场景，可能会造成server负载不均衡。
-2. 在client 3.4之前的版本中，负载均衡算法有一个严重的Bug：如果第一个节点异常了，可能会导致你的client访问etcd server异常，特别是在Kubernetes场景中会导致APIServer不可用。不过，该Bug已在Kubernetes 1.16版本后被修复。
-
-### 串行读与线性读
-先看看<u>写流程</u>的简单示意图
-
-如下图所示，当client发起一个更新hello为world请求后，若leader收到写请求，它会将此请求持久化到WAL日志，并广播给各个节点，若一半以上节点持久化成功，则该请求对应的日志条目被标识为已提交，etcdserver模块异步从raft模块获取已提交的日志条目，应用到状态机 (boltdb 等)。
-![alt text](../pictures/etcd-read-queue.png)
-此时如果client发出一个读取hello的请求，假设该请求是直接从状态机里读取，并且连接的是C节点。而C节点刚好出现I/O波动，导致它应用已提交的日志缓慢，则会出现读取hello值的时候，更新hello的日志还没提交到状态机，导致读出来的是旧数据。
-
-在多节点的etcd集群中，各个节点的状态机数据一致性存在差异。而不同业务场景的读请求对数据是否最新的容忍度是不一样的，有的场景它可以容忍数据落后几秒甚至几分钟，有的场景要求必须读到反映集群共识的最新数据。
-1. 串行读：直接读取状态机的数据返回，无需通过raft模块与集群其他节点进行交互。可能存在读取到的数据滞后，适合对数据敏感度不高的场景。
-2. 线性读：<u>etcd默认的读取模式</u>，会通过raft模块保证读取到的最新的数据
-
-### 线性读之readindex
-![alt text](../pictures/etcd-readindex.png)
-当集群的节点收到一个线性读请求之后，节点会先发一个readindex的请求给集群的leader，获取集群最新的已提交的日志索引（committed index）。
-
-leader收到readindex请求时，为防止脑裂等异常场景，会向follower发送心跳确认，一半以上节点确认leader身份后才能将已提交的索引 (committed index) 返回给节点。
-
-节点收到readindex之后，等待本身的状态机的应用索引(applied index)大于等于leader的已提交索引时 (committed Index)之后通知读请求读取状态机的数据。
-
-> 早期etcd线性读使用的Raft log read，也就是说把读请求像写请求一样走一遍Raft的协议，基于Raft的日志的有序性，实现线性读。
-> 但此方案读涉及磁盘IO开销，性能较差，后来实现了ReadIndex读机制来提升读性能，满足了Kubernetes等业务的诉求。
-
-### MVCC
+## MVCC
 多版本并发控制(Multiversion concurrency control)模块是为了解决上一讲我们提到etcd v2不支持保存key的历史版本、不支持多key事务等问题而产生的。它核心由内存树形索引模块（treeIndex）和嵌入式的kv持久化存储库boltdb组成。
 > boltdb，它是个基于 B+ tree 实现的 key-value 键值库，支持事务，提供 Get/Put 等简易 API 给 etcd 操作。
 
@@ -73,7 +33,7 @@ treeIndex与boltdb关系如下面的读事务流程图所示，从treeIndex中�
 MVCC机制是基于多版本技术实现的一种乐观锁机制，它乐观地认为数据不会发生冲突，但是当事务提交时，具备检测数据是否冲突的能力。
 
 更新一个 key-value 数据的时候，它并不会直接覆盖原数据，而是新增一个版本来存储新的数据，每个数据都有一个版本号。即使是删除数据的时候，它实际也是新增一条带删除标识的数据记录。<u>当你指定版本号读取数据时，它实际上访问的是版本号生成那个时间点的快照数据。</u>
-#### treeIndex的数据结构
+### treeIndex的数据结构
 在treeIndex中，每个节点的key是一个keyIndex结构，etcd就是通过它保存了用户的key与版本号的映射关系。
 ```golang
 type keyIndex struct {
@@ -97,18 +57,18 @@ type revision struct {
     sub int64 // 一个事务内的子版本号，从0开始随事务内put/delete操作递增
 }
 ```
-#### boltdb的数据结构
+### boltdb的数据结构
 boltdb是一个key-value的存储系统，key为revision结构体，value也是一个结构体，它是由用户key、value、create_revision、mod_revision、version、lease 组成
 - create_revision表示此key创建时的版本号，也就是treeIndex中keyIndex.generations[i].created 字段
 - mod_revision表示key最后一次修改时的版本号，即put操作发生时的全局版本号加1
 - version表示此key的修改次数，也就是treeIndex中keyIndex.generations[i].ver 字段
-#### MVCC查询key的流程
+### MVCC查询key的流程
 1. treeIndex模块从B-tree中，根据key查找到keyIndex对象
 2. keyIndex对象匹配有效的generation
 3. 如果不带版本号读则读取最新的数据，返回generation中最后一个revision
 4. 如果带了版本号查询（假如为N），则在generation中遍历所有revisions，返回小于等于N的最大revision（key在N的revision时候不一定有数据，所以是返回小于等于N中的最大值）
 5. 根据返回的revision去boltdb中查询并返回数据
-#### MVCC删除key的流程
+### MVCC删除key的流程
 1. 与更新key不一样的是，生成的boltdb key版本号{N,0,t}追加了删除标识（tombstone, 简写t），boltdb value变成只含用户key的KeyValue结构体
 2. treeIndex给key的keyIndex追加一个空的generation对象，表示此索引对应的key被删除了
 3. 再次查询key的时候发现keyIndex存在空的generation对象，并且查询的版本大于等于被删除时候的版本号，则返回空
