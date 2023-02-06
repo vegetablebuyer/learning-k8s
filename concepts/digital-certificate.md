@@ -47,6 +47,8 @@ https双向认证的过程：
 10. 服务端和客户端在后续通讯过程中就使用这个密钥R进行通信了。
 
 #### 查看数字证书的内容
+CN：Common Name，kube-apiserver 从证书中提取作为请求的用户名 (User)；
+O：Organization，kube-apiserver 从证书中提取该字段作为请求用户所属的组 (Group)
 ```shell script
 root@hostname:/path/# openssl x509 -in apiserver.crt -text -noout
 Certificate:
